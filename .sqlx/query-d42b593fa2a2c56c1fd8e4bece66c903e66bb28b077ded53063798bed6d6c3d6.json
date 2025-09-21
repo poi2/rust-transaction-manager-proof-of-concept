@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO todo (id, description)\n        VALUES ( $1, $2 )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d42b593fa2a2c56c1fd8e4bece66c903e66bb28b077ded53063798bed6d6c3d6"
+}
