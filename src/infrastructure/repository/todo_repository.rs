@@ -1,49 +1,15 @@
 use crate::domain::todo_aggregate::{Todo, TodoRepositoryTrait};
 use anyhow::Result as AnyhowResult;
-use sqlx::{Acquire, Postgres, Transaction, query, query_as};
+use sqlx::{Acquire, PgPool, Postgres, Transaction, query, query_as};
 
 pub struct TodoRepositoryImpl;
 
 impl TodoRepositoryImpl {
-    pub async fn create_todo_tx(tx: &mut Transaction<'_, Postgres>, todo: Todo) -> AnyhowResult<Todo> {
-        query!(
-            "INSERT INTO todo (id, description) VALUES ($1, $2)",
-            todo.id,
-            todo.description
-        )
-        .execute(&mut **tx)
-        .await?;
-
-        Ok(todo)
-    }
-
-    pub async fn find_todo_by_id_tx(tx: &mut Transaction<'_, Postgres>, id: uuid::Uuid) -> AnyhowResult<Option<Todo>> {
-        let row = query_as!(Todo, "SELECT id, description FROM todo WHERE id = $1", id)
-            .fetch_optional(&mut **tx)
-            .await?;
-
-        Ok(row)
-    }
-
-    pub async fn update_todo_tx(tx: &mut Transaction<'_, Postgres>, todo: Todo) -> AnyhowResult<Todo> {
-        query!(
-            "UPDATE todo SET description = $2 WHERE id = $1",
-            todo.id,
-            todo.description
-        )
-        .execute(&mut **tx)
-        .await?;
-
-        Ok(todo)
-    }
-}
-
-impl TodoRepositoryTrait for TodoRepositoryImpl {
-    async fn create_todo<'a, A>(acquire: A, todo: Todo) -> AnyhowResult<Todo>
-    where
-        A: Acquire<'a, Database = Postgres> + Send,
-    {
-        let mut conn = acquire.acquire().await?;
+    pub async fn create_todo(
+        db: impl Acquire<'_, Database = Postgres>,
+        todo: Todo,
+    ) -> AnyhowResult<Todo> {
+        let mut conn = db.acquire().await?;
 
         query!(
             "INSERT INTO todo (id, description) VALUES ($1, $2)",
@@ -56,11 +22,11 @@ impl TodoRepositoryTrait for TodoRepositoryImpl {
         Ok(todo)
     }
 
-    async fn find_todo_by_id<'a, A>(acquire: A, id: uuid::Uuid) -> AnyhowResult<Option<Todo>>
-    where
-        A: Acquire<'a, Database = Postgres> + Send,
-    {
-        let mut conn = acquire.acquire().await?;
+    pub async fn find_todo_by_id(
+        db: impl Acquire<'_, Database = Postgres>,
+        id: uuid::Uuid,
+    ) -> AnyhowResult<Option<Todo>> {
+        let mut conn = db.acquire().await?;
 
         let row = query_as!(Todo, "SELECT id, description FROM todo WHERE id = $1", id)
             .fetch_optional(&mut *conn)
@@ -69,24 +35,11 @@ impl TodoRepositoryTrait for TodoRepositoryImpl {
         Ok(row)
     }
 
-    async fn list_todos<'a, A>(acquire: A) -> AnyhowResult<Vec<Todo>>
-    where
-        A: Acquire<'a, Database = Postgres> + Send,
-    {
-        let mut conn = acquire.acquire().await?;
-
-        let rows = query_as!(Todo, "SELECT id, description FROM todo ORDER BY id")
-            .fetch_all(&mut *conn)
-            .await?;
-
-        Ok(rows)
-    }
-
-    async fn update_todo<'a, A>(acquire: A, todo: Todo) -> AnyhowResult<Todo>
-    where
-        A: Acquire<'a, Database = Postgres> + Send,
-    {
-        let mut conn = acquire.acquire().await?;
+    pub async fn update_todo(
+        db: impl Acquire<'_, Database = Postgres>,
+        todo: Todo,
+    ) -> AnyhowResult<Todo> {
+        let mut conn = db.acquire().await?;
 
         query!(
             "UPDATE todo SET description = $2 WHERE id = $1",
@@ -99,17 +52,66 @@ impl TodoRepositoryTrait for TodoRepositoryImpl {
         Ok(todo)
     }
 
-    async fn delete_todo<'a, A>(acquire: A, id: uuid::Uuid) -> AnyhowResult<()>
-    where
-        A: Acquire<'a, Database = Postgres> + Send,
-    {
-        let mut conn = acquire.acquire().await?;
+    pub async fn list_todos(
+        db: impl Acquire<'_, Database = Postgres>,
+    ) -> AnyhowResult<Vec<Todo>> {
+        let mut conn = db.acquire().await?;
+
+        let rows = query_as!(Todo, "SELECT id, description FROM todo ORDER BY id")
+            .fetch_all(&mut *conn)
+            .await?;
+
+        Ok(rows)
+    }
+
+    pub async fn delete_todo(
+        db: impl Acquire<'_, Database = Postgres>,
+        id: uuid::Uuid,
+    ) -> AnyhowResult<()> {
+        let mut conn = db.acquire().await?;
 
         query!("DELETE FROM todo WHERE id = $1", id)
             .execute(&mut *conn)
             .await?;
 
         Ok(())
+    }
+}
+
+impl TodoRepositoryTrait for TodoRepositoryImpl {
+    async fn create_todo<'a, A>(acquire: A, todo: Todo) -> AnyhowResult<Todo>
+    where
+        A: Acquire<'a, Database = Postgres> + Send,
+    {
+        Self::create_todo(acquire, todo).await
+    }
+
+    async fn find_todo_by_id<'a, A>(acquire: A, id: uuid::Uuid) -> AnyhowResult<Option<Todo>>
+    where
+        A: Acquire<'a, Database = Postgres> + Send,
+    {
+        Self::find_todo_by_id(acquire, id).await
+    }
+
+    async fn list_todos<'a, A>(acquire: A) -> AnyhowResult<Vec<Todo>>
+    where
+        A: Acquire<'a, Database = Postgres> + Send,
+    {
+        Self::list_todos(acquire).await
+    }
+
+    async fn update_todo<'a, A>(acquire: A, todo: Todo) -> AnyhowResult<Todo>
+    where
+        A: Acquire<'a, Database = Postgres> + Send,
+    {
+        Self::update_todo(acquire, todo).await
+    }
+
+    async fn delete_todo<'a, A>(acquire: A, id: uuid::Uuid) -> AnyhowResult<()>
+    where
+        A: Acquire<'a, Database = Postgres> + Send,
+    {
+        Self::delete_todo(acquire, id).await
     }
 }
 
