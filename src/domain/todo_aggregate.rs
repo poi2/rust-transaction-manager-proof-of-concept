@@ -1,6 +1,5 @@
 use anyhow::Result as AnyhowResult;
 use derive_getters::{Dissolve, Getters};
-use sqlx::{Acquire, Postgres};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Dissolve, Getters)]
@@ -20,23 +19,9 @@ impl Todo {
 
 #[allow(dead_code)]
 pub trait TodoRepositoryTrait {
-    async fn create_todo<'a, A>(acquire: A, todo: Todo) -> AnyhowResult<Todo>
-    where
-        A: Acquire<'a, Database = Postgres> + Send;
-
-    async fn find_todo_by_id<'a, A>(acquire: A, id: uuid::Uuid) -> AnyhowResult<Option<Todo>>
-    where
-        A: Acquire<'a, Database = Postgres> + Send;
-
-    async fn list_todos<'a, A>(acquire: A) -> AnyhowResult<Vec<Todo>>
-    where
-        A: Acquire<'a, Database = Postgres> + Send;
-
-    async fn update_todo<'a, A>(acquire: A, todo: Todo) -> AnyhowResult<Todo>
-    where
-        A: Acquire<'a, Database = Postgres> + Send;
-
-    async fn delete_todo<'a, A>(acquire: A, id: uuid::Uuid) -> AnyhowResult<()>
-    where
-        A: Acquire<'a, Database = Postgres> + Send;
+    async fn create_todo(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, todo: Todo) -> AnyhowResult<Todo>;
+    async fn find_todo_by_id(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, id: uuid::Uuid) -> AnyhowResult<Option<Todo>>;
+    async fn list_todos(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>) -> AnyhowResult<Vec<Todo>>;
+    async fn update_todo(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, todo: Todo) -> AnyhowResult<Todo>;
+    async fn delete_todo(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, id: uuid::Uuid) -> AnyhowResult<()>;
 }

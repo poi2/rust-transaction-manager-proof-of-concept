@@ -28,62 +28,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Starting todo management example...");
 
-    // Pool を使った直接のCRUD操作で実証
-    println!("=== Pool を使った操作 ===");
+    println!("=== Transaction専用Repository実証 ===");
 
-    // 1. Create Todo
-    let new_todo = Todo::new(todo_id, original_description.clone());
-    let created_todo = TodoRepositoryImpl::create_todo(&pool, new_todo).await?;
-    println!("Created todo: {:?}", created_todo);
-
-    // 2. Select Todo
-    let found_todo = TodoRepositoryImpl::find_todo_by_id(&pool, todo_id).await?;
-    println!("Found todo: {:?}", found_todo);
-
-    // 3. Update Todo
-    let updated_todo = Todo::new(todo_id, updated_description.clone());
-    let updated_todo = TodoRepositoryImpl::update_todo(&pool, updated_todo).await?;
-    println!("Updated todo: {:?}", updated_todo);
-
-    // 4. Select updated Todo
-    let updated_found_todo = TodoRepositoryImpl::find_todo_by_id(&pool, todo_id).await?;
-    println!("Updated found todo: {:?}", updated_found_todo);
-
-    println!("\n=== Transaction を使った操作 ===");
-
-    // Transaction内での複数操作（DBContextの機能を活用）
-    let tx_result: AnyhowResult<Todo> = db_context
+    // すべての操作をTransaction内で実行
+    let crud_result: AnyhowResult<Todo> = db_context
         .transaction(|tx| {
             Box::pin(async move {
-                // 新しいTodoを作成（Transactionを一度だけ使用）
-                let tx_todo = Todo::new(uuid::Uuid::new_v4(), "Transaction Todo".to_string());
-                let created = TodoRepositoryImpl::create_todo(&mut *tx, tx_todo).await?;
-                println!("Transaction内で作成: {:?}", created);
-                Ok(created)
+                // 1. Create Todo
+                let new_todo = Todo::new(todo_id, original_description.clone());
+                let created_todo = TodoRepositoryImpl::create_todo(tx, new_todo).await?;
+                println!("1. Created todo: {:?}", created_todo);
+
+                // 2. Select Todo
+                let found_todo = TodoRepositoryImpl::find_todo_by_id(tx, todo_id).await?;
+                println!("2. Found todo: {:?}", found_todo);
+
+                // 3. Update Todo
+                let updated_todo = Todo::new(todo_id, updated_description.clone());
+                let updated_todo = TodoRepositoryImpl::update_todo(tx, updated_todo).await?;
+                println!("3. Updated todo: {:?}", updated_todo);
+
+                // 4. Select updated Todo
+                let final_todo = TodoRepositoryImpl::find_todo_by_id(tx, todo_id).await?;
+                println!("4. Final todo: {:?}", final_todo);
+
+                Ok(updated_todo)
             })
         })
         .await;
 
-    match tx_result {
+    match crud_result {
         Ok(todo) => {
-            println!("Transaction操作成功: {:?}", todo);
-
-            // Transactionで作成されたTodoをPoolで確認
-            let confirmed = TodoRepositoryImpl::find_todo_by_id(&pool, todo.id).await?;
-            println!("Poolで確認: {:?}", confirmed);
+            println!("\n✅ Transaction内でのCRUD操作が全て成功！");
+            println!("最終結果: {:?}", todo);
         }
         Err(e) => {
-            println!("Transaction失敗: {:?}", e);
+            println!("❌ Transaction失敗: {:?}", e);
+            return Err(e.into());
         }
     }
 
-    println!("\n=== Acquire トレイトによる統一実証完了 ===");
-    println!("✅ Pool: 複数操作可能");
-    println!("✅ Transaction: 単一操作可能（テストで複数操作も確認済み）");
-    println!("✅ 同じメソッドで両方に対応！");
-
-    println!("\n=== 最終確認 ===");
-    println!("最終的なTodo: {:?}", updated_found_todo);
+    println!("\n=== Transaction専用Repository完成 ===");
+    println!("✅ Repository は Transaction のみサポート");
+    println!("✅ 複数操作も Transaction 内で正常動作");
+    println!("✅ ライフタイム問題なし");
 
     // クリーンアップ
     let _ = query!(r#"DELETE FROM todo WHERE id = $1"#, todo_id)
