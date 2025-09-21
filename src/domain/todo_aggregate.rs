@@ -19,9 +19,28 @@ impl Todo {
 
 #[allow(dead_code)]
 pub trait TodoRepositoryTrait {
-    async fn create_todo(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, todo: Todo) -> AnyhowResult<Todo>;
-    async fn find_todo_by_id(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, id: uuid::Uuid) -> AnyhowResult<Option<Todo>>;
-    async fn list_todos(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>) -> AnyhowResult<Vec<Todo>>;
-    async fn update_todo(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, todo: Todo) -> AnyhowResult<Todo>;
-    async fn delete_todo(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, id: uuid::Uuid) -> AnyhowResult<()>;
+    async fn create_todo(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        todo: Todo,
+    ) -> AnyhowResult<Todo>;
+    async fn find_todo_by_id(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        id: uuid::Uuid,
+    ) -> AnyhowResult<Option<Todo>>;
+    async fn list_todos(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> AnyhowResult<Vec<Todo>>;
+    async fn update_todo(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        todo: Todo,
+    ) -> AnyhowResult<Todo>;
+    async fn delete_todo(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        id: uuid::Uuid,
+    ) -> AnyhowResult<()>;
 }

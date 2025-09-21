@@ -1,3 +1,5 @@
+use std::{future::Future, pin::Pin};
+
 use sqlx::{Error as SqlxError, PgPool, Postgres, Transaction};
 
 use crate::domain::transaction_manager::TransactionManager;
@@ -19,9 +21,7 @@ impl TransactionManager for DBContext {
     where
         F: for<'a> FnOnce(
             &'a mut Transaction<'_, Postgres>,
-        ) -> std::pin::Pin<
-            Box<dyn std::future::Future<Output = Result<T, E>> + Send + 'a>,
-        >,
+        ) -> Pin<Box<dyn Future<Output = Result<T, E>> + Send + 'a>>,
         E: From<SqlxError>,
         T: Send,
         E: Send,

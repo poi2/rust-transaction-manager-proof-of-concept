@@ -5,7 +5,14 @@ use sqlx::{Postgres, Transaction, query, query_as};
 pub struct TodoRepositoryImpl;
 
 impl TodoRepositoryImpl {
-    pub async fn create_todo(
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl TodoRepositoryTrait for TodoRepositoryImpl {
+    async fn create_todo(
+        &self,
         tx: &mut Transaction<'_, Postgres>,
         todo: Todo,
     ) -> AnyhowResult<Todo> {
@@ -20,7 +27,8 @@ impl TodoRepositoryImpl {
         Ok(todo)
     }
 
-    pub async fn find_todo_by_id(
+    async fn find_todo_by_id(
+        &self,
         tx: &mut Transaction<'_, Postgres>,
         id: uuid::Uuid,
     ) -> AnyhowResult<Option<Todo>> {
@@ -31,7 +39,16 @@ impl TodoRepositoryImpl {
         Ok(row)
     }
 
-    pub async fn update_todo(
+    async fn list_todos(&self, tx: &mut Transaction<'_, Postgres>) -> AnyhowResult<Vec<Todo>> {
+        let rows = query_as!(Todo, "SELECT id, description FROM todo ORDER BY id")
+            .fetch_all(&mut **tx)
+            .await?;
+
+        Ok(rows)
+    }
+
+    async fn update_todo(
+        &self,
         tx: &mut Transaction<'_, Postgres>,
         todo: Todo,
     ) -> AnyhowResult<Todo> {
@@ -46,17 +63,8 @@ impl TodoRepositoryImpl {
         Ok(todo)
     }
 
-    pub async fn list_todos(
-        tx: &mut Transaction<'_, Postgres>,
-    ) -> AnyhowResult<Vec<Todo>> {
-        let rows = query_as!(Todo, "SELECT id, description FROM todo ORDER BY id")
-            .fetch_all(&mut **tx)
-            .await?;
-
-        Ok(rows)
-    }
-
-    pub async fn delete_todo(
+    async fn delete_todo(
+        &self,
         tx: &mut Transaction<'_, Postgres>,
         id: uuid::Uuid,
     ) -> AnyhowResult<()> {
@@ -65,28 +73,6 @@ impl TodoRepositoryImpl {
             .await?;
 
         Ok(())
-    }
-}
-
-impl TodoRepositoryTrait for TodoRepositoryImpl {
-    async fn create_todo(tx: &mut Transaction<'_, Postgres>, todo: Todo) -> AnyhowResult<Todo> {
-        Self::create_todo(tx, todo).await
-    }
-
-    async fn find_todo_by_id(tx: &mut Transaction<'_, Postgres>, id: uuid::Uuid) -> AnyhowResult<Option<Todo>> {
-        Self::find_todo_by_id(tx, id).await
-    }
-
-    async fn list_todos(tx: &mut Transaction<'_, Postgres>) -> AnyhowResult<Vec<Todo>> {
-        Self::list_todos(tx).await
-    }
-
-    async fn update_todo(tx: &mut Transaction<'_, Postgres>, todo: Todo) -> AnyhowResult<Todo> {
-        Self::update_todo(tx, todo).await
-    }
-
-    async fn delete_todo(tx: &mut Transaction<'_, Postgres>, id: uuid::Uuid) -> AnyhowResult<()> {
-        Self::delete_todo(tx, id).await
     }
 }
 
@@ -103,7 +89,9 @@ mod tests {
     async fn test_create_todo_with_transaction(pool: PgPool) {
         let mut tx = pool.begin().await.unwrap();
         let todo = generate_todo("test todo");
-        let result = TodoRepositoryImpl::create_todo(&mut tx, todo.clone()).await;
+        let result = TodoRepositoryImpl::new()
+            .create_todo(&mut tx, todo.clone())
+            .await;
         assert!(result.is_ok());
         let created_todo = result.unwrap();
         assert_eq!(created_todo.id, todo.id);
@@ -115,11 +103,14 @@ mod tests {
     async fn test_find_todo_by_id_with_transaction(pool: PgPool) {
         let mut tx = pool.begin().await.unwrap();
         let todo = generate_todo("test todo");
-        TodoRepositoryImpl::create_todo(&mut tx, todo.clone())
+        TodoRepositoryImpl::new()
+            .create_todo(&mut tx, todo.clone())
             .await
             .unwrap();
 
-        let result = TodoRepositoryImpl::find_todo_by_id(&mut tx, todo.id).await;
+        let result = TodoRepositoryImpl::new()
+            .find_todo_by_id(&mut tx, todo.id)
+            .await;
         assert!(result.is_ok());
         let found_todo = result.unwrap();
         assert!(found_todo.is_some());
@@ -134,14 +125,16 @@ mod tests {
         let mut tx = pool.begin().await.unwrap();
         let todo1 = generate_todo("test todo 1");
         let todo2 = generate_todo("test todo 2");
-        TodoRepositoryImpl::create_todo(&mut tx, todo1.clone())
+        TodoRepositoryImpl::new()
+            .create_todo(&mut tx, todo1.clone())
             .await
             .unwrap();
-        TodoRepositoryImpl::create_todo(&mut tx, todo2.clone())
+        TodoRepositoryImpl::new()
+            .create_todo(&mut tx, todo2.clone())
             .await
             .unwrap();
 
-        let result = TodoRepositoryImpl::list_todos(&mut tx).await;
+        let result = TodoRepositoryImpl::new().list_todos(&mut tx).await;
         assert!(result.is_ok());
         let todos = result.unwrap();
         assert!(todos.len() >= 2);
@@ -152,15 +145,19 @@ mod tests {
     async fn test_update_todo_with_transaction(pool: PgPool) {
         let mut tx = pool.begin().await.unwrap();
         let todo = generate_todo("Original description");
-        TodoRepositoryImpl::create_todo(&mut tx, todo.clone())
+        TodoRepositoryImpl::new()
+            .create_todo(&mut tx, todo.clone())
             .await
             .unwrap();
 
         let updated_todo = Todo::new(todo.id, "Updated description".to_string());
-        let result = TodoRepositoryImpl::update_todo(&mut tx, updated_todo).await;
+        let result = TodoRepositoryImpl::new()
+            .update_todo(&mut tx, updated_todo)
+            .await;
         assert!(result.is_ok());
 
-        let found_todo = TodoRepositoryImpl::find_todo_by_id(&mut tx, todo.id)
+        let found_todo = TodoRepositoryImpl::new()
+            .find_todo_by_id(&mut tx, todo.id)
             .await
             .unwrap()
             .unwrap();
@@ -172,14 +169,18 @@ mod tests {
     async fn test_delete_todo_with_transaction(pool: PgPool) {
         let mut tx = pool.begin().await.unwrap();
         let todo = generate_todo("test todo");
-        TodoRepositoryImpl::create_todo(&mut tx, todo.clone())
+        TodoRepositoryImpl::new()
+            .create_todo(&mut tx, todo.clone())
             .await
             .unwrap();
 
-        let result = TodoRepositoryImpl::delete_todo(&mut tx, todo.id).await;
+        let result = TodoRepositoryImpl::new()
+            .delete_todo(&mut tx, todo.id)
+            .await;
         assert!(result.is_ok());
 
-        let found_todo = TodoRepositoryImpl::find_todo_by_id(&mut tx, todo.id)
+        let found_todo = TodoRepositoryImpl::new()
+            .find_todo_by_id(&mut tx, todo.id)
             .await
             .unwrap();
         assert!(found_todo.is_none());

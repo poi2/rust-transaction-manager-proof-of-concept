@@ -1,5 +1,5 @@
 use anyhow::Result as AnyhowResult;
-use domain::todo_aggregate::Todo;
+use domain::todo_aggregate::{Todo, TodoRepositoryTrait};
 use domain::transaction_manager::TransactionManager;
 use infrastructure::repository::todo_repository::TodoRepositoryImpl;
 use infrastructure::transaction_manager::db_context::DBContext;
@@ -30,26 +30,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("=== Transaction専用Repository実証 ===");
 
+    // 本来は DI コンテナなどに注入して、コンテナから resolve/provide して使う想定
+    let todo_repository = TodoRepositoryImpl::new();
+
     // すべての操作をTransaction内で実行
     let crud_result: AnyhowResult<Todo> = db_context
         .transaction(|tx| {
             Box::pin(async move {
                 // 1. Create Todo
                 let new_todo = Todo::new(todo_id, original_description.clone());
-                let created_todo = TodoRepositoryImpl::create_todo(tx, new_todo).await?;
+                let created_todo = todo_repository.create_todo(tx, new_todo).await?;
                 println!("1. Created todo: {:?}", created_todo);
 
                 // 2. Select Todo
-                let found_todo = TodoRepositoryImpl::find_todo_by_id(tx, todo_id).await?;
+                let found_todo = todo_repository.find_todo_by_id(tx, todo_id).await?;
                 println!("2. Found todo: {:?}", found_todo);
 
                 // 3. Update Todo
                 let updated_todo = Todo::new(todo_id, updated_description.clone());
-                let updated_todo = TodoRepositoryImpl::update_todo(tx, updated_todo).await?;
+                let updated_todo = todo_repository.update_todo(tx, updated_todo).await?;
                 println!("3. Updated todo: {:?}", updated_todo);
 
                 // 4. Select updated Todo
-                let final_todo = TodoRepositoryImpl::find_todo_by_id(tx, todo_id).await?;
+                let final_todo = todo_repository.find_todo_by_id(tx, todo_id).await?;
                 println!("4. Final todo: {:?}", final_todo);
 
                 Ok(updated_todo)
