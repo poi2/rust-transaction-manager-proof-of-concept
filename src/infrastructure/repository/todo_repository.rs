@@ -1,4 +1,4 @@
-use crate::domain::todo_aggregate::{Todo, TodoRepositoryTrait};
+use crate::domain::todo_aggregate::{PsqlAcquire, Todo, TodoRepositoryTrait};
 use anyhow::Result as AnyhowResult;
 use sqlx::{Postgres, Transaction, query, query_as};
 
@@ -73,6 +73,20 @@ impl TodoRepositoryTrait for TodoRepositoryImpl {
             .await?;
 
         Ok(())
+    }
+
+    async fn create_todo2(&self, executor: impl PsqlAcquire<'_>, todo: Todo) -> AnyhowResult<Todo> {
+        let mut conn = executor.acquire().await?;
+
+        query!(
+            "INSERT INTO todo (id, description) VALUES ($1, $2)",
+            todo.id,
+            todo.description
+        )
+        .execute(&mut *conn)
+        .await?;
+
+        Ok(todo)
     }
 }
 

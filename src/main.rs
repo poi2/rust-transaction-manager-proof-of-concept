@@ -1,8 +1,10 @@
 use anyhow::Result as AnyhowResult;
-use domain::todo_aggregate::{Todo, TodoRepositoryTrait};
+use domain::todo_aggregate::{Todo, TodoRepositoryTrait, NewTodoRepositoryTrait};
 use domain::transaction_manager::TransactionManager;
 use infrastructure::repository::todo_repository::TodoRepositoryImpl;
+use infrastructure::repository::new_todo_repository::NewTodoRepositoryImpl;
 use infrastructure::transaction_manager::db_context::DBContext;
+use infrastructure::transaction_manager::new_transaction_manager::{NewPsqlTransactionManager, NewPsqlTransactionManagerImpl};
 use sqlx::query;
 
 mod domain;
@@ -56,6 +58,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("4. Final todo: {:?}", final_todo);
 
                 Ok(updated_todo)
+
+                // let new_todo = Todo::new(todo_id, original_description.clone());
+                // todo_repository
+                //     .create_todo2(&mut tx, new_todo.clone())
+                //     .await?;
+                // Ok(new_todo)
             })
         })
         .await;
@@ -82,6 +90,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
 
     println!("Example completed!");
+
+    println!("\n=== 新しいTransaction Manager実証 ===");
+
+    // 新しいTransaction Manager でのパターン実証
+    let new_todo_repository = NewTodoRepositoryImpl::new();
+    let new_txn_mgr = NewPsqlTransactionManagerImpl::new(pool.clone());
+    
+    let new_todo_id = uuid::Uuid::new_v4();
+    let new_description = "New Transaction Manager Test".to_string();
+
+    println!("--- パターン1: Transaction使用 ---");
+    
+    // Transaction開始
+    new_txn_mgr.begin().await?;
+    
+    // Transaction内での複数操作
+    let new_todo = Todo::new(new_todo_id, new_description.clone());
+    let created = new_todo_repository.create_todo(&new_txn_mgr, new_todo).await?;
+    println!("Transaction内でTodo作成: {:?}", created);
+    
+    let found = new_todo_repository.find_todo_by_id(&new_txn_mgr, new_todo_id).await?;
+    println!("Transaction内でTodo検索: {:?}", found);
+    
+    // Commit
+    new_txn_mgr.commit().await?;
+    println!("Transaction commit完了");
+
+    println!("--- パターン2: 単発Connection使用 ---");
+    
+    let single_todo_id = uuid::Uuid::new_v4();
+    let single_todo = Todo::new(single_todo_id, "Single Connection Test".to_string());
+    
+    // Transaction未開始のまま単発実行
+    let single_created = new_todo_repository.create_todo(&new_txn_mgr, single_todo).await?;
+    println!("単発Connection でTodo作成: {:?}", single_created);
+    
+    let single_found = new_todo_repository.find_todo_by_id(&new_txn_mgr, single_todo_id).await?;
+    println!("単発Connection でTodo検索: {:?}", single_found);
+
+    // クリーンアップ
+    let _ = query!(r#"DELETE FROM todo WHERE id = $1"#, new_todo_id)
+        .execute(&pool)
+        .await?;
+    let _ = query!(r#"DELETE FROM todo WHERE id = $1"#, single_todo_id)
+        .execute(&pool)
+        .await?;
+
+    println!("\n✅ 新しいTransaction Manager パターン完成！");
+    println!("✅ Transaction/Connection 自動切り替え");
+    println!("✅ 統一インターフェース");
 
     Ok(())
 }
