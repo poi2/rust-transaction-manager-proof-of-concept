@@ -4,7 +4,7 @@ use domain::transaction_manager::TransactionManager;
 use infrastructure::repository::todo_repository::TodoRepositoryImpl;
 use infrastructure::repository::new_todo_repository::NewTodoRepositoryImpl;
 use infrastructure::transaction_manager::db_context::DBContext;
-use infrastructure::transaction_manager::new_transaction_manager::{NewPsqlTransactionManager, NewPsqlTransactionManagerImpl};
+use infrastructure::transaction_manager::new_transaction_manager::{NewTransactionManager, PsqlTransactionManager};
 use sqlx::query;
 
 mod domain;
@@ -95,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 新しいTransaction Manager でのパターン実証
     let new_todo_repository = NewTodoRepositoryImpl::new();
-    let new_txn_mgr = NewPsqlTransactionManagerImpl::new(pool.clone());
+    let new_txn_mgr = PsqlTransactionManager::new(std::sync::Arc::new(pool.clone()));
     
     let new_todo_id = uuid::Uuid::new_v4();
     let new_description = "New Transaction Manager Test".to_string();

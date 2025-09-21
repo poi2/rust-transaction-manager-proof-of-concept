@@ -1,7 +1,8 @@
-use crate::domain::todo_aggregate::{NewTodoRepositoryTrait, Todo};
+use crate::domain::todo_aggregate::{NewTodoRepositoryTrait, PgTransactionManager, Todo};
 use crate::infrastructure::transaction_manager::new_transaction_manager::NewTransactionManager;
 use anyhow::Result as AnyhowResult;
-use sqlx::{query, query_as};
+use sqlx::{PgPool, Postgres, Transaction, query, query_as};
+use std::sync::Arc;
 
 pub struct NewTodoRepositoryImpl;
 
@@ -11,15 +12,12 @@ impl NewTodoRepositoryImpl {
     }
 }
 
+// 型エイリアス使用でのRepository実装
 #[async_trait::async_trait]
-impl<T, C> NewTodoRepositoryTrait<T, C> for NewTodoRepositoryImpl
-where
-    T: Send + Sync,
-    C: Send + Sync,
-{
+impl NewTodoRepositoryTrait for NewTodoRepositoryImpl {
     async fn create_todo(
         &self,
-        txn_mgr: &dyn NewTransactionManager<T, C>,
+        txn_mgr: &PgTransactionManager<'_>,
         todo: Todo,
     ) -> AnyhowResult<Todo> {
         if txn_mgr.is_transaction_started().await {
@@ -41,7 +39,7 @@ where
                 todo.id,
                 todo.description
             )
-            .execute(&pool)
+            .execute(&*pool)
             .await?;
         }
 
@@ -50,7 +48,7 @@ where
 
     async fn find_todo_by_id(
         &self,
-        txn_mgr: &dyn NewTransactionManager<T, C>,
+        txn_mgr: &PgTransactionManager<'_>,
         id: uuid::Uuid,
     ) -> AnyhowResult<Option<Todo>> {
         if txn_mgr.is_transaction_started().await {
@@ -65,16 +63,13 @@ where
             // 単発Connection実行
             let pool = txn_mgr.get_connection().await?;
             let row = query_as!(Todo, "SELECT id, description FROM todo WHERE id = $1", id)
-                .fetch_optional(&pool)
+                .fetch_optional(&*pool)
                 .await?;
             Ok(row)
         }
     }
 
-    async fn list_todos(
-        &self,
-        txn_mgr: &dyn NewTransactionManager<T, C>,
-    ) -> AnyhowResult<Vec<Todo>> {
+    async fn list_todos(&self, txn_mgr: &PgTransactionManager<'_>) -> AnyhowResult<Vec<Todo>> {
         if txn_mgr.is_transaction_started().await {
             // Transaction内で実行
             let mut tx_guard = txn_mgr.get_transaction().await?;
@@ -87,7 +82,7 @@ where
             // 単発Connection実行
             let pool = txn_mgr.get_connection().await?;
             let rows = query_as!(Todo, "SELECT id, description FROM todo ORDER BY id")
-                .fetch_all(&pool)
+                .fetch_all(&*pool)
                 .await?;
             Ok(rows)
         }
@@ -95,7 +90,7 @@ where
 
     async fn update_todo(
         &self,
-        txn_mgr: &dyn NewTransactionManager<T, C>,
+        txn_mgr: &PgTransactionManager<'_>,
         todo: Todo,
     ) -> AnyhowResult<Todo> {
         if txn_mgr.is_transaction_started().await {
@@ -117,7 +112,7 @@ where
                 todo.id,
                 todo.description
             )
-            .execute(&pool)
+            .execute(&*pool)
             .await?;
         }
 
@@ -126,7 +121,7 @@ where
 
     async fn delete_todo(
         &self,
-        txn_mgr: &dyn NewTransactionManager<T, C>,
+        txn_mgr: &PgTransactionManager<'_>,
         id: uuid::Uuid,
     ) -> AnyhowResult<()> {
         if txn_mgr.is_transaction_started().await {
@@ -140,7 +135,7 @@ where
             // 単発Connection実行
             let pool = txn_mgr.get_connection().await?;
             query!("DELETE FROM todo WHERE id = $1", id)
-                .execute(&pool)
+                .execute(&*pool)
                 .await?;
         }
 

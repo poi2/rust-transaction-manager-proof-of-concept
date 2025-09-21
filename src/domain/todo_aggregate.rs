@@ -55,35 +55,38 @@ pub trait TodoRepositoryTrait {
 }
 
 // 新しいTransaction Manager用のRepository trait
+// 型エイリアスで簡潔に
+pub type PgTransactionManager<'a> = dyn NewTransactionManager<Transaction<'a, Postgres>, std::sync::Arc<sqlx::PgPool>>;
+
 #[allow(dead_code)]
 #[async_trait::async_trait]
-pub trait NewTodoRepositoryTrait<T, C> {
+pub trait NewTodoRepositoryTrait {
     async fn create_todo(
         &self,
-        txn_mgr: &dyn NewTransactionManager<T, C>,
+        txn_mgr: &PgTransactionManager<'_>,
         todo: Todo,
     ) -> AnyhowResult<Todo>;
 
     async fn find_todo_by_id(
         &self,
-        txn_mgr: &dyn NewTransactionManager<T, C>,
+        txn_mgr: &PgTransactionManager<'_>,
         id: uuid::Uuid,
     ) -> AnyhowResult<Option<Todo>>;
 
     async fn list_todos(
         &self,
-        txn_mgr: &dyn NewTransactionManager<T, C>,
+        txn_mgr: &PgTransactionManager<'_>,
     ) -> AnyhowResult<Vec<Todo>>;
 
     async fn update_todo(
         &self,
-        txn_mgr: &dyn NewTransactionManager<T, C>,
+        txn_mgr: &PgTransactionManager<'_>,
         todo: Todo,
     ) -> AnyhowResult<Todo>;
 
     async fn delete_todo(
         &self,
-        txn_mgr: &dyn NewTransactionManager<T, C>,
+        txn_mgr: &PgTransactionManager<'_>,
         id: uuid::Uuid,
     ) -> AnyhowResult<()>;
 }
