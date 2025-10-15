@@ -57,7 +57,9 @@ mod tests {
 
     impl SelectRepositoryTrait for SelectRepositoryImpl {
         async fn select_one(tx: &mut Transaction<'_, Postgres>) -> AnyhowResult<i32> {
-            let row = query!("SELECT 1 as value").fetch_one(&mut **tx).await?;
+            let row = query!("SELECT 1 as value FROM todo")
+                .fetch_one(&mut **tx)
+                .await?;
             Ok(row.value.unwrap_or(0))
         }
 
@@ -70,8 +72,23 @@ mod tests {
         }
     }
 
+    async fn insert_todo(pool: &PgPool) -> AnyhowResult<()> {
+        query!(
+            r#"INSERT INTO todo (id, description)
+                VALUES ( $1, $2 )
+                "#,
+            uuid::Uuid::new_v4(),
+            "test todo",
+        )
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
     #[sqlx::test]
     async fn test_transaction_success_with_repository(pool: PgPool) {
+        insert_todo(&pool).await.unwrap();
+
         let db_context = DBContext::new(pool);
 
         let result: AnyhowResult<i32> = db_context
@@ -101,6 +118,8 @@ mod tests {
 
     #[sqlx::test]
     async fn test_transaction_multiple_operations(pool: PgPool) {
+        insert_todo(&pool).await.unwrap();
+
         let db_context = DBContext::new(pool);
 
         let result: AnyhowResult<i32> = db_context
