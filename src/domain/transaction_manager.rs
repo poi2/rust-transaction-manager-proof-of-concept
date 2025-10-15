@@ -1,4 +1,7 @@
 use sqlx::Postgres;
+use std::{future::Future, pin::Pin};
+
+use crate::domain::database_transaction::DatabaseTransaction;
 
 pub trait TransactionManager {
     #[allow(dead_code)]
@@ -29,4 +32,16 @@ pub trait TransactionManager2 {
         E: From<sqlx::Error>,
         T: Send,
         E: Send;
+}
+
+/// 完全にORM非依存なTransactionManager
+pub trait TransactionManager3 {
+    type Transaction: DatabaseTransaction;
+    
+    async fn transaction<T, F>(&self, f: F) -> Result<T, <Self::Transaction as DatabaseTransaction>::Error>
+    where
+        F: for<'a> FnOnce(
+            &'a mut Self::Transaction,
+        ) -> Pin<Box<dyn Future<Output = Result<T, <Self::Transaction as DatabaseTransaction>::Error>> + Send + 'a>>,
+        T: Send;
 }
