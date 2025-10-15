@@ -142,7 +142,7 @@ mod tests_for_generic_pattern {
     use super::*;
 
     use anyhow::Result as AnyhowResult;
-    use sqlx::{Database, PgPool, Postgres, query};
+    use sqlx::{Database, query};
 
     trait SelectRepositoryTraitGenericPattern<DB: Database> {
         async fn select_one(tx: &mut Transaction<'_, DB>) -> AnyhowResult<i32>;
@@ -190,5 +190,63 @@ mod tests_for_generic_pattern {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 2);
+    }
+}
+
+// TransactionWrapperのテスト
+#[cfg(test)]
+mod transaction_wrapper_tests {
+    use super::*;
+
+    use crate::domain::database_transaction::{DatabaseRow, DatabaseTransaction};
+    use crate::infrastructure::transaction_manager::sqlx_transaction_wrapper::SqlxTransactionWrapper;
+    use anyhow::Result as AnyhowResult;
+    use sqlx::query;
+
+    async fn insert_todo(pool: &PgPool) -> AnyhowResult<()> {
+        query!(
+            r#"INSERT INTO todo (id, description)
+                VALUES ( $1, $2 )
+                "#,
+            uuid::Uuid::new_v4(),
+            "test todo",
+        )
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_transaction_wrapper_execute_query(pool: PgPool) {
+        insert_todo(&pool).await.unwrap();
+
+        let tx = pool.begin().await.unwrap();
+        let mut wrapper = SqlxTransactionWrapper::new(tx);
+
+        let row = wrapper.execute_query("SELECT 1 as value FROM todo").await;
+
+        assert!(row.is_ok());
+        let row = row.unwrap();
+        let value = row.get_i32("value");
+        assert!(value.is_ok());
+        assert_eq!(value.unwrap(), 1);
+    }
+
+    #[sqlx::test]
+    async fn test_transaction_wrapper_commit(pool: PgPool) {
+        let tx = pool.begin().await.unwrap();
+        let wrapper = SqlxTransactionWrapper::new(tx);
+
+        let result = wrapper.commit().await;
+        assert!(result.is_ok());
+    }
+
+    #[sqlx::test]
+    async fn test_transaction_wrapper_rollback(pool: PgPool) {
+        let tx = pool.begin().await.unwrap();
+        let wrapper = SqlxTransactionWrapper::new(tx);
+
+        let result = wrapper.rollback().await;
+        assert!(result.is_ok());
     }
 }
