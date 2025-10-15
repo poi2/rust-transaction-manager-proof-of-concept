@@ -36,6 +36,7 @@ pub struct SqlxTransactionWrapper<'a> {
 }
 
 impl<'a> SqlxTransactionWrapper<'a> {
+    #[allow(dead_code)]
     pub fn new(transaction: Transaction<'a, Postgres>) -> Self {
         Self { transaction }
     }
@@ -55,23 +56,19 @@ impl<'a> DatabaseTransaction for SqlxTransactionWrapper<'a> {
         })
     }
 
-    fn commit(mut self) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>> {
-        Box::pin(async move {
-            self.transaction
-                .commit()
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?;
-            Ok(())
-        })
+    async fn commit(self) -> Result<(), Self::Error> {
+        self.transaction
+            .commit()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
+        Ok(())
     }
 
-    fn rollback(mut self) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>> {
-        Box::pin(async move {
-            self.transaction
-                .rollback()
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?;
-            Ok(())
-        })
+    async fn rollback(self) -> Result<(), Self::Error> {
+        self.transaction
+            .rollback()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
+        Ok(())
     }
 }

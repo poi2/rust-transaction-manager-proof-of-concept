@@ -17,7 +17,7 @@ pub trait DatabaseTransaction: Send {
         sql: &'a str,
     ) -> Pin<Box<dyn Future<Output = Result<Self::Row, Self::Error>> + Send + 'a>>;
 
-    fn commit(self) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>>;
+    async fn commit(self) -> Result<(), Self::Error>;
 
-    fn rollback(self) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send>>;
+    async fn rollback(self) -> Result<(), Self::Error>;
 }
