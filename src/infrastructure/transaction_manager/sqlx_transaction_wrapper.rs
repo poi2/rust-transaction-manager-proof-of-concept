@@ -17,13 +17,13 @@ impl SqlxRowWrapper {
 }
 
 impl DatabaseRow for SqlxRowWrapper {
-    fn get_i32(&self, column: &str) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
+    fn get_i32(&self, column: &str) -> anyhow::Result<i32> {
         use sqlx::Row;
         let value: i32 = self.row.try_get(column)?;
         Ok(value)
     }
 
-    fn get_string(&self, column: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    fn get_string(&self, column: &str) -> anyhow::Result<String> {
         use sqlx::Row;
         let value: String = self.row.try_get(column)?;
         Ok(value)

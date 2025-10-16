@@ -36,12 +36,13 @@ pub trait TransactionManager2 {
 
 /// 完全にORM非依存なTransactionManager
 pub trait TransactionManager3 {
-    type Transaction: DatabaseTransaction;
+    type Error: Send + Sync + 'static;
+    type Row: DatabaseTransaction<Error = Self::Error>;
     
-    async fn transaction<T, F>(&self, f: F) -> Result<T, <Self::Transaction as DatabaseTransaction>::Error>
+    async fn transaction<T, F>(&self, f: F) -> Result<T, Self::Error>
     where
         F: for<'a> FnOnce(
-            &'a mut Self::Transaction,
-        ) -> Pin<Box<dyn Future<Output = Result<T, <Self::Transaction as DatabaseTransaction>::Error>> + Send + 'a>>,
+            &'a mut Self::Row,
+        ) -> Pin<Box<dyn Future<Output = Result<T, Self::Error>> + Send + 'a>>,
         T: Send;
 }

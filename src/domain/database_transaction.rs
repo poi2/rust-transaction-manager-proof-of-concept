@@ -3,8 +3,8 @@ use std::pin::Pin;
 
 /// Domain層のRow抽象化
 pub trait DatabaseRow: Send + Sync {
-    fn get_i32(&self, column: &str) -> Result<i32, Box<dyn std::error::Error + Send + Sync>>;
-    fn get_string(&self, column: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>>;
+    fn get_i32(&self, column: &str) -> anyhow::Result<i32>;
+    fn get_string(&self, column: &str) -> anyhow::Result<String>;
 }
 
 /// Domain層のTransaction抽象化
