@@ -38,11 +38,12 @@ pub trait TransactionManager2 {
 pub trait TransactionManager3 {
     type Error: Send + Sync + 'static;
     type Row: DatabaseTransaction<Error = Self::Error>;
-    
+
     async fn transaction<T, F>(&self, f: F) -> Result<T, Self::Error>
     where
         F: for<'a> FnOnce(
             &'a mut Self::Row,
-        ) -> Pin<Box<dyn Future<Output = Result<T, Self::Error>> + Send + 'a>>,
+        )
+            -> Pin<Box<dyn Future<Output = Result<T, Self::Error>> + Send + 'a>>,
         T: Send;
 }
