@@ -2,25 +2,25 @@ use sea_orm::{Database, DatabaseConnection, TransactionTrait};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use domain::db_context::DbContextMutexGuard;
-use domain::transaction_manager::TransactionManagerMutexGuard;
+use domain::db_context::DbContext;
+use domain::transaction_manager::TransactionManager;
 
-use crate::db_context::SeaOrmDbContextMutexGuard;
+use crate::db_context::SeaOrmDbContext;
 
 /// SeaORM TransactionManager implementation
-pub struct SeaOrmTransactionManagerMutexGuard {
+pub struct SeaOrmTransactionManager {
     db: DatabaseConnection,
 }
 
-impl SeaOrmTransactionManagerMutexGuard {
+impl SeaOrmTransactionManager {
     pub async fn new(database_url: &str) -> Result<Self, anyhow::Error> {
         let db = Database::connect(database_url).await?;
         Ok(Self { db })
     }
 }
 
-impl TransactionManagerMutexGuard for SeaOrmTransactionManagerMutexGuard {
-    type DbContext = SeaOrmDbContextMutexGuard;
+impl TransactionManager for SeaOrmTransactionManager {
+    type DbContext = SeaOrmDbContext;
     type Error = anyhow::Error;
 
     fn transaction<T, F, Fut>(
@@ -35,7 +35,7 @@ impl TransactionManagerMutexGuard for SeaOrmTransactionManagerMutexGuard {
         let db = self.db.clone();
         async move {
             let txn = db.begin().await?;
-            let db_context = SeaOrmDbContextMutexGuard::new(txn);
+            let db_context = SeaOrmDbContext::new(txn);
             let db_context = Arc::new(Mutex::new(db_context));
 
             match f(db_context.clone()).await {

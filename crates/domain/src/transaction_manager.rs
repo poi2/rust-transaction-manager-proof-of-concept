@@ -2,11 +2,11 @@ use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::db_context::DbContextMutexGuard;
+use crate::db_context::DbContext;
 
-/// Transaction Manager trait for MutexGuard pattern
-pub trait TransactionManagerMutexGuard {
-    type DbContext: DbContextMutexGuard;
+/// Transaction Manager trait for  pattern
+pub trait TransactionManager {
+    type DbContext: DbContext;
     type Error: Send + Sync + 'static;
 
     fn transaction<T, F, Fut>(&self, f: F) -> impl Future<Output = Result<T, Self::Error>> + Send

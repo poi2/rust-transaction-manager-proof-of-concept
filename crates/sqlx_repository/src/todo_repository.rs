@@ -2,18 +2,18 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use domain::db_context::DbContextMutexGuard;
+use domain::db_context::DbContext;
 use domain::todo_aggregate::Todo;
-use domain::todo_repository::TodoRepositoryMutexGuard;
+use domain::todo_repository::TodoRepository;
 
-use crate::db_context::SqlxDbContextMutexGuard;
+use crate::db_context::SqlxDbContext;
 
 /// SqlxTodoRepository implementation using query!() macros for type safety
 #[derive(Clone)]
-pub struct SqlxTodoRepositoryMutexGuard;
+pub struct SqlxTodoRepository;
 
-impl TodoRepositoryMutexGuard for SqlxTodoRepositoryMutexGuard {
-    type DbContext = SqlxDbContextMutexGuard<'static>;
+impl TodoRepository for SqlxTodoRepository {
+    type DbContext = SqlxDbContext<'static>;
     type Error = anyhow::Error;
 
     async fn create(

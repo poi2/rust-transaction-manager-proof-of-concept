@@ -2,13 +2,13 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::db_context::DbContextMutexGuard;
+use crate::db_context::DbContext;
 use crate::todo_aggregate::Todo;
 
-/// Todo Repository trait for MutexGuard pattern
+/// Todo Repository trait for  pattern
 #[allow(async_fn_in_trait)]
-pub trait TodoRepositoryMutexGuard {
-    type DbContext: DbContextMutexGuard;
+pub trait TodoRepository {
+    type DbContext: DbContext;
     type Error: Send + Sync + 'static;
 
     async fn create(

@@ -3,19 +3,19 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use domain::db_context::DbContextMutexGuard;
+use domain::db_context::DbContext;
 use domain::todo_aggregate::Todo;
-use domain::todo_repository::TodoRepositoryMutexGuard;
+use domain::todo_repository::TodoRepository;
 
-use crate::db_context::SeaOrmDbContextMutexGuard;
+use crate::db_context::SeaOrmDbContext;
 use crate::todo_entity::{ActiveModel, Column, Entity as TodoEntity};
 
 /// SeaORM TodoRepository implementation using entity operations for type safety
 #[derive(Clone)]
-pub struct SeaOrmTodoRepositoryMutexGuard;
+pub struct SeaOrmTodoRepository;
 
-impl TodoRepositoryMutexGuard for SeaOrmTodoRepositoryMutexGuard {
-    type DbContext = SeaOrmDbContextMutexGuard;
+impl TodoRepository for SeaOrmTodoRepository {
+    type DbContext = SeaOrmDbContext;
     type Error = anyhow::Error;
 
     async fn create(

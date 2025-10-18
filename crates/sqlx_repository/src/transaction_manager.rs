@@ -4,10 +4,10 @@ use tokio::sync::Mutex;
 
 use sqlx::{PgPool, Postgres, Transaction};
 
-use domain::db_context::DbContextMutexGuard;
-use domain::transaction_manager::TransactionManagerMutexGuard;
+use domain::db_context::DbContext;
+use domain::transaction_manager::TransactionManager;
 
-use crate::db_context::SqlxDbContextMutexGuard;
+use crate::db_context::SqlxDbContext;
 
 /// DBContext implementation using PostgreSQL
 pub struct DBContext {
@@ -20,8 +20,8 @@ impl DBContext {
     }
 }
 
-impl TransactionManagerMutexGuard for DBContext {
-    type DbContext = SqlxDbContextMutexGuard<'static>;
+impl TransactionManager for DBContext {
+    type DbContext = SqlxDbContext<'static>;
     type Error = anyhow::Error;
 
     async fn transaction<T, F, Fut>(&self, f: F) -> Result<T, Self::Error>
@@ -35,7 +35,7 @@ impl TransactionManagerMutexGuard for DBContext {
         // ライフタイム問題の回避: unsafeを使用してstatic化
         let tx: Transaction<'static, Postgres> = unsafe { std::mem::transmute(tx) };
 
-        let db_context = Arc::new(Mutex::new(SqlxDbContextMutexGuard::new(tx)));
+        let db_context = Arc::new(Mutex::new(SqlxDbContext::new(tx)));
         let db_context_clone = db_context.clone();
 
         match f(db_context).await {

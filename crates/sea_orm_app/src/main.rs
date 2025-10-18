@@ -1,9 +1,9 @@
 use domain::todo_aggregate::Todo;
-use domain::todo_repository::TodoRepositoryMutexGuard;
-use domain::transaction_manager::TransactionManagerMutexGuard;
+use domain::todo_repository::TodoRepository;
+use domain::transaction_manager::TransactionManager;
 
-use sea_orm_repository::todo_repository::SeaOrmTodoRepositoryMutexGuard;
-use sea_orm_repository::transaction_manager::SeaOrmTransactionManagerMutexGuard;
+use sea_orm_repository::todo_repository::SeaOrmTodoRepository;
+use sea_orm_repository::transaction_manager::SeaOrmTransactionManager;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -11,8 +11,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::env::var("DATABASE_URL").expect("Env var DATABASE_URL is required for this example.");
 
     // SeaORM TransactionManager生成
-    let transaction_manager = SeaOrmTransactionManagerMutexGuard::new(&conn_str).await?;
-    let todo_repository = SeaOrmTodoRepositoryMutexGuard;
+    let transaction_manager = SeaOrmTransactionManager::new(&conn_str).await?;
+    let todo_repository = SeaOrmTodoRepository;
 
     println!("=== SeaORM版のTransaction Manager使用例 (Workspace版) ===");
 

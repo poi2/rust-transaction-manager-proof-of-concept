@@ -1,13 +1,13 @@
 use sqlx::{Postgres, Transaction};
 
-use domain::db_context::DbContextMutexGuard;
+use domain::db_context::DbContext;
 
-/// sqlx::Transaction wrapper for MutexGuard pattern
-pub struct SqlxDbContextMutexGuard<'a> {
+/// sqlx::Transaction wrapper for  pattern
+pub struct SqlxDbContext<'a> {
     transaction: Option<Transaction<'a, Postgres>>,
 }
 
-impl<'a> SqlxDbContextMutexGuard<'a> {
+impl<'a> SqlxDbContext<'a> {
     pub fn new(transaction: Transaction<'a, Postgres>) -> Self {
         Self {
             transaction: Some(transaction),
@@ -15,7 +15,7 @@ impl<'a> SqlxDbContextMutexGuard<'a> {
     }
 }
 
-impl<'a> DbContextMutexGuard for SqlxDbContextMutexGuard<'a> {
+impl<'a> DbContext for SqlxDbContext<'a> {
     /// PostgreSQL transaction type from sqlx
     /// This provides direct access to sqlx::Transaction<Postgres> for:
     /// - Using query!() macros with compile-time SQL validation

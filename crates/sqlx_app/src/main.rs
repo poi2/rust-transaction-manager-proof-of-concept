@@ -1,8 +1,8 @@
 use domain::todo_aggregate::Todo;
-use domain::todo_repository::TodoRepositoryMutexGuard;
-use domain::transaction_manager::TransactionManagerMutexGuard;
+use domain::todo_repository::TodoRepository;
+use domain::transaction_manager::TransactionManager;
 
-use sqlx_repository::todo_repository::SqlxTodoRepositoryMutexGuard;
+use sqlx_repository::todo_repository::SqlxTodoRepository;
 use sqlx_repository::transaction_manager::DBContext;
 
 #[tokio::main]
@@ -13,9 +13,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // DBContext生成
     let transaction_manager = DBContext::new(pool.clone());
-    let todo_repository = SqlxTodoRepositoryMutexGuard;
+    let todo_repository = SqlxTodoRepository;
 
-    println!("=== MutexGuard版のTransaction Manager使用例 (Workspace版) ===");
+    println!("=== 版のTransaction Manager使用例 (Workspace版) ===");
 
     // 1. 単一の操作：Todoを作成
     let todo_id1 = uuid::Uuid::new_v4();

@@ -1,10 +1,10 @@
-/// Domain layer database context abstraction for MutexGuard pattern
+/// Domain layer database context abstraction
 ///
 /// This trait provides database-agnostic transaction management while allowing
 /// repository implementations to access native database transaction types
 /// for maximum flexibility and type safety with query!() macros.
 #[allow(async_fn_in_trait)]
-pub trait DbContextMutexGuard: Send + Sync {
+pub trait DbContext: Send + Sync {
     /// Database-specific transaction type (e.g., sqlx::Transaction<Postgres>)
     /// This allows repository implementations to use query!() macros
     /// while keeping the domain layer database-agnostic

@@ -1,13 +1,13 @@
 use sea_orm::DatabaseTransaction;
 
-use domain::db_context::DbContextMutexGuard;
+use domain::db_context::DbContext;
 
-/// SeaORM DatabaseTransaction wrapper for MutexGuard pattern
-pub struct SeaOrmDbContextMutexGuard {
+/// SeaORM DatabaseTransaction wrapper for  pattern
+pub struct SeaOrmDbContext {
     transaction: Option<DatabaseTransaction>,
 }
 
-impl SeaOrmDbContextMutexGuard {
+impl SeaOrmDbContext {
     pub fn new(transaction: DatabaseTransaction) -> Self {
         Self {
             transaction: Some(transaction),
@@ -15,7 +15,7 @@ impl SeaOrmDbContextMutexGuard {
     }
 }
 
-impl DbContextMutexGuard for SeaOrmDbContextMutexGuard {
+impl DbContext for SeaOrmDbContext {
     /// SeaORM DatabaseTransaction type
     /// This provides direct access to sea_orm::DatabaseTransaction for:
     /// - Using SeaORM's type-safe entity operations
