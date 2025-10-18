@@ -44,6 +44,8 @@ impl<'a> DbContextMutexGuard for SqlxDbContextMutexGuard<'a> {
                         data.insert(column_name, QueryValue::Int(value as i32));
                     } else if let Ok(value) = row.try_get::<String, _>(i) {
                         data.insert(column_name, QueryValue::String(value));
+                    } else if let Ok(value) = row.try_get::<uuid::Uuid, _>(i) {
+                        data.insert(column_name, QueryValue::String(value.to_string()));
                     } else {
                         data.insert(column_name, QueryValue::Null);
                     }
