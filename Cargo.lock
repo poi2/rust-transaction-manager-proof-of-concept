@@ -30,14 +30,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
-name = "async-trait"
-version = "0.1.89"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9035ad2d096bed7955a320ee7e2230574d28fd3c3a0f186cbea1ff3c7eed5dbb"
+name = "app"
+version = "0.1.0"
 dependencies = [
- "proc-macro2",
- "quote",
- "syn",
+ "anyhow",
+ "domain",
+ "sqlx",
+ "sqlx_repository",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -226,17 +227,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive-getters"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74ef43543e701c01ad77d3a5922755c6a1d71b22d942cb8042be4994b380caff"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -257,6 +247,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "domain"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -468,18 +467,6 @@ dependencies = [
  "libc",
  "r-efi",
  "wasi 0.14.5+wasi-0.2.4",
-]
-
-[[package]]
-name = "getset"
-version = "0.1.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cf0fc11e47561d47397154977bc219f4cf809b2974facc3ccb3b89e2436f912"
-dependencies = [
- "proc-macro-error2",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -1022,28 +1009,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro-error-attr2"
-version = "2.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
-dependencies = [
- "proc-macro2",
- "quote",
-]
-
-[[package]]
-name = "proc-macro-error2"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
-dependencies = [
- "proc-macro-error-attr2",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1526,6 +1491,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlx_repository"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "domain",
+ "sqlx",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1581,19 +1557,6 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys 0.61.0",
-]
-
-[[package]]
-name = "test-sqlx"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "derive-getters",
- "getset",
- "sqlx",
- "tokio",
- "uuid",
 ]
 
 [[package]]
