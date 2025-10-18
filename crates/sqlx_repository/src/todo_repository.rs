@@ -1,4 +1,3 @@
-use sqlx::Row;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -9,7 +8,7 @@ use domain::todo_repository::TodoRepositoryMutexGuard;
 
 use crate::db_context::SqlxDbContextMutexGuard;
 
-/// SqlxTodoRepository implementation for MutexGuard pattern
+/// SqlxTodoRepository implementation using query!() macros for type safety
 #[derive(Clone)]
 pub struct SqlxTodoRepositoryMutexGuard;
 
@@ -24,15 +23,16 @@ impl TodoRepositoryMutexGuard for SqlxTodoRepositoryMutexGuard {
         description: &str,
     ) -> Result<Todo, Self::Error> {
         let mut guard = db_context.lock().await;
+        let txn = guard.get_transaction();
 
-        // SQLインジェクション対策を含む安全な実装
-        let sql_with_values = format!(
-            "INSERT INTO todo (id, description) VALUES ('{}', '{}')",
+        sqlx::query!(
+            "INSERT INTO todo (id, description) VALUES ($1, $2)",
             id,
-            description.replace("'", "''") // SQLインジェクション対策
-        );
+            description
+        )
+        .execute(&mut **txn)
+        .await?;
 
-        guard.execute_query(&sql_with_values).await?;
         Ok(Todo::new(id, description.to_string()))
     }
 
@@ -42,21 +42,13 @@ impl TodoRepositoryMutexGuard for SqlxTodoRepositoryMutexGuard {
         id: Uuid,
     ) -> Result<Option<Todo>, Self::Error> {
         let mut guard = db_context.lock().await;
-        let sql = format!("SELECT id, description FROM todo WHERE id = '{id}'");
+        let txn = guard.get_transaction();
 
-        // execute_query returns Vec<PgRow> - native sqlx PostgreSQL rows
-        let rows = guard.execute_query(&sql).await?;
+        let result = sqlx::query!("SELECT id, description FROM todo WHERE id = $1", id)
+            .fetch_optional(&mut **txn)
+            .await?;
 
-        if let Some(row) = rows.first() {
-            // Direct access to PostgreSQL types with type safety
-            // row.try_get() supports all PostgreSQL types:
-            // - UUID, BIGINT, DECIMAL, BOOLEAN, TIMESTAMP, JSON, etc.
-            let id: Uuid = row.try_get("id")?;
-            let description: String = row.try_get("description")?;
-            Ok(Some(Todo::new(id, description)))
-        } else {
-            Ok(None)
-        }
+        Ok(result.map(|row| Todo::new(row.id, row.description)))
     }
 
     async fn find_all(
@@ -64,18 +56,16 @@ impl TodoRepositoryMutexGuard for SqlxTodoRepositoryMutexGuard {
         db_context: &Arc<Mutex<Self::DbContext>>,
     ) -> Result<Vec<Todo>, Self::Error> {
         let mut guard = db_context.lock().await;
-        let sql = "SELECT id, description FROM todo ORDER BY description";
+        let txn = guard.get_transaction();
 
-        let rows = guard.execute_query(sql).await?;
-        let mut todos = Vec::new();
+        let rows = sqlx::query!("SELECT id, description FROM todo ORDER BY description")
+            .fetch_all(&mut **txn)
+            .await?;
 
-        for row in rows {
-            let id: Uuid = row.try_get("id")?;
-            let description: String = row.try_get("description")?;
-            todos.push(Todo::new(id, description));
-        }
-
-        Ok(todos)
+        Ok(rows
+            .into_iter()
+            .map(|row| Todo::new(row.id, row.description))
+            .collect())
     }
 
     async fn update(
@@ -84,13 +74,16 @@ impl TodoRepositoryMutexGuard for SqlxTodoRepositoryMutexGuard {
         todo: Todo,
     ) -> Result<Todo, Self::Error> {
         let mut guard = db_context.lock().await;
-        let sql = format!(
-            "UPDATE todo SET description = '{}' WHERE id = '{}'",
-            todo.description().replace("'", "''"),
-            todo.id()
-        );
+        let txn = guard.get_transaction();
 
-        guard.execute_query(&sql).await?;
+        sqlx::query!(
+            "UPDATE todo SET description = $1 WHERE id = $2",
+            todo.description(),
+            todo.id()
+        )
+        .execute(&mut **txn)
+        .await?;
+
         Ok(todo)
     }
 
@@ -100,9 +93,12 @@ impl TodoRepositoryMutexGuard for SqlxTodoRepositoryMutexGuard {
         id: Uuid,
     ) -> Result<(), Self::Error> {
         let mut guard = db_context.lock().await;
-        let sql = format!("DELETE FROM todo WHERE id = '{id}'");
+        let txn = guard.get_transaction();
 
-        guard.execute_query(&sql).await?;
+        sqlx::query!("DELETE FROM todo WHERE id = $1", id)
+            .execute(&mut **txn)
+            .await?;
+
         Ok(())
     }
 }

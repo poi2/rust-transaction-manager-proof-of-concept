@@ -1,4 +1,4 @@
-use sqlx::{postgres::PgRow, Postgres, Transaction};
+use sqlx::{Postgres, Transaction};
 
 use domain::db_context::DbContextMutexGuard;
 
@@ -16,38 +16,27 @@ impl<'a> SqlxDbContextMutexGuard<'a> {
 }
 
 impl<'a> DbContextMutexGuard for SqlxDbContextMutexGuard<'a> {
-    /// PostgreSQL-specific row type from sqlx
-    /// This provides access to all PostgreSQL data types including:
-    /// - UUID, BIGINT, DECIMAL, BOOLEAN, TIMESTAMP, JSON, etc.
-    /// - Custom types and arrays
-    /// - Full type safety with compile-time SQL checking (when using sqlx::query!)
-    type Row = PgRow;
+    /// PostgreSQL transaction type from sqlx
+    /// This provides direct access to sqlx::Transaction<Postgres> for:
+    /// - Using query!() macros with compile-time SQL validation
+    /// - Full PostgreSQL type safety and feature access
+    /// - Native sqlx operations without abstraction overhead
+    type Tx = Transaction<'a, Postgres>;
     type Error = anyhow::Error;
 
-    /// Execute raw SQL query against PostgreSQL transaction
+    /// Get mutable reference to the underlying sqlx transaction
     ///
-    /// Returns native `sqlx::postgres::PgRow` instances, allowing:
-    /// - `row.try_get::<Uuid, _>("id")?`
-    /// - `row.try_get::<i64, _>("count")?`
-    /// - `row.try_get::<serde_json::Value, _>("data")?`
-    /// - Any PostgreSQL type supported by sqlx
-    ///
-    /// This implementation uses `Box::pin(async move { ... })` to satisfy
-    /// the trait's Future requirements while maintaining type safety.
-    fn execute_query<'b>(
-        &'b mut self,
-        sql: &'b str,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<Vec<Self::Row>, Self::Error>> + Send + 'b>,
-    > {
-        Box::pin(async move {
-            let transaction = self
-                .transaction
-                .as_mut()
-                .ok_or_else(|| anyhow::anyhow!("Transaction already consumed"))?;
-            let rows = sqlx::query(sql).fetch_all(&mut **transaction).await?;
-            Ok(rows)
-        })
+    /// This allows repository implementations to use sqlx::query!() macros:
+    /// ```rust
+    /// let txn = guard.get_transaction();
+    /// let result = sqlx::query!("SELECT id, name FROM users WHERE id = $1", user_id)
+    ///     .fetch_optional(&mut **txn)
+    ///     .await?;
+    /// ```
+    fn get_transaction(&mut self) -> &mut Self::Tx {
+        self.transaction
+            .as_mut()
+            .expect("Transaction already consumed")
     }
 
     async fn commit(&mut self) -> Result<(), Self::Error> {
