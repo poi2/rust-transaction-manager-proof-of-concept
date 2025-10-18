@@ -1,10 +1,10 @@
 [package]
-name = "app"
+name = "sqlx_app"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "main"
+name = "sqlx_repository"
 path = "src/main.rs"
 
 [dependencies]

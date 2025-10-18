@@ -2,7 +2,9 @@
 members = [
     "crates/domain",
     "crates/sqlx_repository",
-    "crates/app",
+    "crates/sea_orm_repository",
+    "crates/sqlx_app",
+    "crates/sea_orm_app",
 ]
 resolver = "2"
 
