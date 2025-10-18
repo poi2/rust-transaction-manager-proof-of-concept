@@ -1,3 +1,4 @@
+use sqlx::Row;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -43,12 +44,15 @@ impl TodoRepositoryMutexGuard for SqlxTodoRepositoryMutexGuard {
         let mut guard = db_context.lock().await;
         let sql = format!("SELECT id, description FROM todo WHERE id = '{id}'");
 
+        // execute_query returns Vec<PgRow> - native sqlx PostgreSQL rows
         let rows = guard.execute_query(&sql).await?;
 
         if let Some(row) = rows.first() {
-            let id_str = row.get_string("id")?;
-            let description = row.get_string("description")?;
-            let id = Uuid::parse_str(&id_str)?;
+            // Direct access to PostgreSQL types with type safety
+            // row.try_get() supports all PostgreSQL types:
+            // - UUID, BIGINT, DECIMAL, BOOLEAN, TIMESTAMP, JSON, etc.
+            let id: Uuid = row.try_get("id")?;
+            let description: String = row.try_get("description")?;
             Ok(Some(Todo::new(id, description)))
         } else {
             Ok(None)
@@ -66,9 +70,8 @@ impl TodoRepositoryMutexGuard for SqlxTodoRepositoryMutexGuard {
         let mut todos = Vec::new();
 
         for row in rows {
-            let id_str = row.get_string("id")?;
-            let description = row.get_string("description")?;
-            let id = Uuid::parse_str(&id_str)?;
+            let id: Uuid = row.try_get("id")?;
+            let description: String = row.try_get("description")?;
             todos.push(Todo::new(id, description));
         }
 
