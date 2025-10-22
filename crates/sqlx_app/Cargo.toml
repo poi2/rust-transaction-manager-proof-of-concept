@@ -10,6 +10,7 @@ path = "src/main.rs"
 [dependencies]
 domain = { path = "../domain" }
 sqlx_repository = { path = "../sqlx_repository" }
+sqlx_use_case = { path = "../sqlx_use_case" }
 anyhow = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }

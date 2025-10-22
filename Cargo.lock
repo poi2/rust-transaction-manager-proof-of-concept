@@ -1699,6 +1699,7 @@ dependencies = [
  "domain",
  "sea-orm",
  "sea_orm_repository",
+ "sea_orm_use_case",
  "tokio",
  "uuid",
 ]
@@ -1710,6 +1711,16 @@ dependencies = [
  "anyhow",
  "domain",
  "sea-orm",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "sea_orm_use_case"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "domain",
  "tokio",
  "uuid",
 ]
@@ -1825,6 +1836,15 @@ name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
+
+[[package]]
+name = "signal-hook-registry"
+version = "1.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2a4719bff48cee6b39d12c020eeb490953ad2443b7055bd0b21fca26bd8c28b"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "signature"
@@ -2104,6 +2124,7 @@ dependencies = [
  "domain",
  "sqlx",
  "sqlx_repository",
+ "sqlx_use_case",
  "tokio",
  "uuid",
 ]
@@ -2115,6 +2136,16 @@ dependencies = [
  "anyhow",
  "domain",
  "sqlx",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "sqlx_use_case"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "domain",
  "tokio",
  "uuid",
 ]
@@ -2293,7 +2324,9 @@ dependencies = [
  "io-uring",
  "libc",
  "mio",
+ "parking_lot",
  "pin-project-lite",
+ "signal-hook-registry",
  "slab",
  "socket2",
  "tokio-macros",
