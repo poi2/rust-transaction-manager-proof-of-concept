@@ -4,7 +4,7 @@ use tokio::sync::Mutex;
 
 use crate::db_context::DbContext;
 
-/// Transaction Manager trait for  pattern
+/// Transaction Manager trait
 pub trait TransactionManager {
     type DbContext: DbContext;
     type Error: Send + Sync + 'static;

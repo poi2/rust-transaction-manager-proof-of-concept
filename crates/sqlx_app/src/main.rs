@@ -18,17 +18,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. 単一の操作：Todoを作成
     let created_todo = todo_use_case
         .create_todo("Learn Rust async programming")
-        .await?;
+        .await
+        .map_err(|e| anyhow::Error::new(e))?;
 
     println!("✅ Todo作成完了: {created_todo:?}");
 
     // 2. 複数の操作：複数のTodoを作成し、取得する
-    let descriptions = vec![
-        "Implement Clean Architecture",
-        "Master PostgreSQL",
-    ];
+    let descriptions = vec!["Implement Clean Architecture", "Master PostgreSQL"];
 
-    match todo_use_case.create_multiple_todos_and_get_all(descriptions).await {
+    match todo_use_case
+        .create_multiple_todos_and_get_all(descriptions)
+        .await
+    {
         Ok((created_todos, all_todos)) => {
             println!("✅ 複数操作完了:");
             for (i, todo) in created_todos.iter().enumerate() {
@@ -45,7 +46,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 3. 検索操作：IDで特定のTodoを検索
-    let found_todo = todo_use_case.find_todo_by_id(created_todo.id).await?;
+    let found_todo = todo_use_case
+        .find_todo_by_id(created_todo.id)
+        .await
+        .map_err(|e| anyhow::Error::new(e))?;
 
     match found_todo {
         Some(todo) => println!("✅ Todo検索成功: {todo:?}"),
@@ -58,7 +62,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             created_todo.clone(),
             "Updated: Learn Rust async programming advanced".to_string(),
         )
-        .await?;
+        .await
+        .map_err(|e| anyhow::Error::new(e))?;
 
     println!("✅ Todo更新完了: {updated_todo:?}");
 

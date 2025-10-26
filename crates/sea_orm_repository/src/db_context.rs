@@ -2,7 +2,7 @@ use sea_orm::DatabaseTransaction;
 
 use domain::db_context::DbContext;
 
-/// SeaORM DatabaseTransaction wrapper for  pattern
+/// SeaORM DatabaseTransaction wrapper
 pub struct SeaOrmDbContext {
     transaction: Option<DatabaseTransaction>,
 }
