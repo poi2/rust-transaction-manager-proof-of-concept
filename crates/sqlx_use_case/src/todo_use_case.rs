@@ -2,8 +2,6 @@ use anyhow::{Error, Result};
 use domain::todo_aggregate::Todo;
 use domain::todo_repository::TodoRepository;
 use domain::transaction_manager::TransactionManager;
-use std::future::Future;
-use std::pin::Pin;
 use uuid::Uuid;
 
 pub struct TodoUseCase<TM, TR> {
@@ -30,16 +28,11 @@ where
         let todo_repository = self.todo_repository.clone();
 
         self.transaction_manager
-            .transaction(
-                |db_context| -> Pin<Box<dyn Future<Output = Result<Todo, Error>> + Send>> {
-                    let todo_repository = todo_repository.clone();
-                    Box::pin(async move {
-                        todo_repository
-                            .create(&db_context, todo_id, description)
-                            .await
-                    })
-                },
-            )
+            .transaction(|db_context| async move {
+                todo_repository
+                    .create(&db_context, todo_id, description)
+                    .await
+            })
             .await
     }
 
@@ -50,28 +43,21 @@ where
         let todo_repository = self.todo_repository.clone();
 
         self.transaction_manager
-            .transaction(
-                |db_context| -> Pin<
-                    Box<dyn Future<Output = Result<(Vec<Todo>, Vec<Todo>), Error>> + Send>,
-                > {
-                    let todo_repository = todo_repository.clone();
-                    Box::pin(async move {
-                        let mut created_todos = Vec::new();
+            .transaction(|db_context| async move {
+                let mut created_todos = Vec::new();
 
-                        for description in descriptions {
-                            let todo_id = Uuid::new_v4();
-                            let todo = todo_repository
-                                .create(&db_context, todo_id, description)
-                                .await?;
-                            created_todos.push(todo);
-                        }
+                for description in descriptions {
+                    let todo_id = Uuid::new_v4();
+                    let todo = todo_repository
+                        .create(&db_context, todo_id, description)
+                        .await?;
+                    created_todos.push(todo);
+                }
 
-                        let all_todos = todo_repository.find_all(&db_context).await?;
+                let all_todos = todo_repository.find_all(&db_context).await?;
 
-                        Ok((created_todos, all_todos))
-                    })
-                },
-            )
+                Ok((created_todos, all_todos))
+            })
             .await
     }
 
@@ -79,12 +65,9 @@ where
         let todo_repository = self.todo_repository.clone();
 
         self.transaction_manager
-            .transaction(
-                |db_context| -> Pin<Box<dyn Future<Output = Result<Option<Todo>, Error>> + Send>> {
-                    let todo_repository = todo_repository.clone();
-                    Box::pin(async move { todo_repository.find_by_id(&db_context, todo_id).await })
-                },
-            )
+            .transaction(|db_context| async move {
+                todo_repository.find_by_id(&db_context, todo_id).await
+            })
             .await
     }
 
@@ -92,15 +75,10 @@ where
         let todo_repository = self.todo_repository.clone();
 
         self.transaction_manager
-            .transaction(
-                |db_context| -> Pin<Box<dyn Future<Output = Result<Todo, Error>> + Send>> {
-                    let todo_repository = todo_repository.clone();
-                    Box::pin(async move {
-                        todo.update_description(new_description);
-                        todo_repository.update(&db_context, todo).await
-                    })
-                },
-            )
+            .transaction(|db_context| async move {
+                todo.update_description(new_description);
+                todo_repository.update(&db_context, todo).await
+            })
             .await
     }
 }
