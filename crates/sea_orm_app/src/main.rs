@@ -1,9 +1,10 @@
+use anyhow::Result;
 use sea_orm_repository::todo_repository::SeaOrmTodoRepository;
 use sea_orm_repository::transaction_manager::SeaOrmTransactionManager;
 use sea_orm_use_case::todo_use_case::TodoUseCase;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     let conn_str =
         std::env::var("DATABASE_URL").expect("Env var DATABASE_URL is required for this example.");
 
@@ -15,10 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== SeaORM版のTransaction Manager使用例 (Workspace版) ===");
 
     // 1. 単一の操作：Todoを作成
-    let created_todo = todo_use_case
-        .create_todo("Learn SeaORM with Rust")
-        .await
-        .map_err(|e| anyhow::Error::new(e))?;
+    let created_todo = todo_use_case.create_todo("Learn SeaORM with Rust").await?;
 
     println!("✅ Todo作成完了: {created_todo:?}");
 
@@ -28,7 +26,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Master PostgreSQL with SeaORM",
     ];
 
-    match todo_use_case.create_multiple_todos_and_get_all(descriptions).await {
+    match todo_use_case
+        .create_multiple_todos_and_get_all(descriptions)
+        .await
+    {
         Ok((created_todos, all_todos)) => {
             println!("✅ 複数操作完了:");
             for (i, todo) in created_todos.iter().enumerate() {
@@ -45,8 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 3. 検索操作：IDで特定のTodoを検索
-    let found_todo = todo_use_case.find_todo_by_id(created_todo.id).await
-        .map_err(|e| anyhow::Error::new(e))?;
+    let found_todo = todo_use_case.find_todo_by_id(created_todo.id).await?;
 
     match found_todo {
         Some(todo) => println!("✅ Todo検索成功: {todo:?}"),
@@ -59,8 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             created_todo.clone(),
             "Updated: Learn SeaORM with Rust advanced features".to_string(),
         )
-        .await
-        .map_err(|e| anyhow::Error::new(e))?;
+        .await?;
 
     println!("✅ Todo更新完了: {updated_todo:?}");
 

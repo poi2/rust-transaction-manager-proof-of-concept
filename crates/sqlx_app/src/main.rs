@@ -1,9 +1,10 @@
+use anyhow::Result;
 use sqlx_repository::todo_repository::SqlxTodoRepository;
 use sqlx_repository::transaction_manager::DBContext;
 use sqlx_use_case::todo_use_case::TodoUseCase;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     let conn_str =
         std::env::var("DATABASE_URL").expect("Env var DATABASE_URL is required for this example.");
     let pool = sqlx::PgPool::connect(&conn_str).await?;
@@ -18,8 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. 単一の操作：Todoを作成
     let created_todo = todo_use_case
         .create_todo("Learn Rust async programming")
-        .await
-        .map_err(|e| anyhow::Error::new(e))?;
+        .await?;
 
     println!("✅ Todo作成完了: {created_todo:?}");
 
@@ -46,10 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 3. 検索操作：IDで特定のTodoを検索
-    let found_todo = todo_use_case
-        .find_todo_by_id(created_todo.id)
-        .await
-        .map_err(|e| anyhow::Error::new(e))?;
+    let found_todo = todo_use_case.find_todo_by_id(created_todo.id).await?;
 
     match found_todo {
         Some(todo) => println!("✅ Todo検索成功: {todo:?}"),
@@ -62,8 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             created_todo.clone(),
             "Updated: Learn Rust async programming advanced".to_string(),
         )
-        .await
-        .map_err(|e| anyhow::Error::new(e))?;
+        .await?;
 
     println!("✅ Todo更新完了: {updated_todo:?}");
 

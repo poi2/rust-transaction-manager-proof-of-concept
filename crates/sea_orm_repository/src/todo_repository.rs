@@ -1,16 +1,15 @@
+use futures::future::BoxFuture;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use domain::db_context::DbContext;
-use domain::todo_aggregate::Todo;
-use domain::todo_repository::TodoRepository;
+use domain::{db_context::DbContext, todo_aggregate::Todo, todo_repository::TodoRepository};
 
-use crate::db_context::SeaOrmDbContext;
-use crate::todo_entity::{ActiveModel, Column, Entity as TodoEntity};
+use crate::{
+    db_context::SeaOrmDbContext,
+    todo_entity::{ActiveModel, Column, Entity as TodoEntity},
+};
 
 /// SeaORM TodoRepository implementation using entity operations for type safety
 #[derive(Clone)]
@@ -25,7 +24,8 @@ impl TodoRepository for SeaOrmTodoRepository {
         db_context: &Arc<Mutex<Self::DbContext>>,
         id: Uuid,
         description: &str,
-    ) -> Pin<Box<dyn Future<Output = Result<Todo, Self::Error>> + Send + '_>> {
+    ) -> BoxFuture<'_, Result<Todo, Self::Error>> {
+        // TODO: Question ここで clone しちゃって大丈夫なものか？
         let db_context = db_context.clone();
         let description = description.to_string();
         Box::pin(async move {
@@ -47,7 +47,7 @@ impl TodoRepository for SeaOrmTodoRepository {
         &self,
         db_context: &Arc<Mutex<Self::DbContext>>,
         id: Uuid,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<Todo>, Self::Error>> + Send + '_>> {
+    ) -> BoxFuture<'_, Result<Option<Todo>, Self::Error>> {
         let db_context = db_context.clone();
         Box::pin(async move {
             let mut guard = db_context.lock().await;
@@ -66,7 +66,7 @@ impl TodoRepository for SeaOrmTodoRepository {
     fn find_all(
         &self,
         db_context: &Arc<Mutex<Self::DbContext>>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Todo>, Self::Error>> + Send + '_>> {
+    ) -> BoxFuture<'_, Result<Vec<Todo>, Self::Error>> {
         let db_context = db_context.clone();
         Box::pin(async move {
             let mut guard = db_context.lock().await;
@@ -88,7 +88,7 @@ impl TodoRepository for SeaOrmTodoRepository {
         &self,
         db_context: &Arc<Mutex<Self::DbContext>>,
         todo: Todo,
-    ) -> Pin<Box<dyn Future<Output = Result<Todo, Self::Error>> + Send + '_>> {
+    ) -> BoxFuture<'_, Result<Todo, Self::Error>> {
         let db_context = db_context.clone();
         Box::pin(async move {
             let mut guard = db_context.lock().await;
@@ -109,7 +109,7 @@ impl TodoRepository for SeaOrmTodoRepository {
         &self,
         db_context: &Arc<Mutex<Self::DbContext>>,
         id: Uuid,
-    ) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + '_>> {
+    ) -> BoxFuture<'_, Result<(), Self::Error>> {
         let db_context = db_context.clone();
         Box::pin(async move {
             let mut guard = db_context.lock().await;

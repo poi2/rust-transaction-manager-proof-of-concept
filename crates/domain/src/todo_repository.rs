@@ -1,5 +1,4 @@
-use std::future::Future;
-use std::pin::Pin;
+use futures::future::BoxFuture;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -17,7 +16,7 @@ pub trait TodoRepository: Send + Sync {
         db_context: &Arc<Mutex<Self::DbContext>>,
         id: Uuid,
         description: &str,
-    ) -> Pin<Box<dyn Future<Output = Result<Todo, Self::Error>> + Send + '_>>
+    ) -> BoxFuture<'_, Result<Todo, Self::Error>>
     where
         Self: Send;
 
@@ -25,14 +24,14 @@ pub trait TodoRepository: Send + Sync {
         &self,
         db_context: &Arc<Mutex<Self::DbContext>>,
         id: Uuid,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<Todo>, Self::Error>> + Send + '_>>
+    ) -> BoxFuture<'_, Result<Option<Todo>, Self::Error>>
     where
         Self: Send;
 
     fn find_all(
         &self,
         db_context: &Arc<Mutex<Self::DbContext>>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Todo>, Self::Error>> + Send + '_>>
+    ) -> BoxFuture<'_, Result<Vec<Todo>, Self::Error>>
     where
         Self: Send;
 
@@ -40,7 +39,7 @@ pub trait TodoRepository: Send + Sync {
         &self,
         db_context: &Arc<Mutex<Self::DbContext>>,
         todo: Todo,
-    ) -> Pin<Box<dyn Future<Output = Result<Todo, Self::Error>> + Send + '_>>
+    ) -> BoxFuture<'_, Result<Todo, Self::Error>>
     where
         Self: Send;
 
@@ -48,7 +47,7 @@ pub trait TodoRepository: Send + Sync {
         &self,
         db_context: &Arc<Mutex<Self::DbContext>>,
         id: Uuid,
-    ) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + '_>>
+    ) -> BoxFuture<'_, Result<(), Self::Error>>
     where
         Self: Send;
 }

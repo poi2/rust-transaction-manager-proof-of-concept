@@ -1,5 +1,4 @@
-use std::future::Future;
-use std::pin::Pin;
+use futures::future::BoxFuture;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -23,7 +22,7 @@ impl TodoRepository for SqlxTodoRepository {
         db_context: &Arc<Mutex<Self::DbContext>>,
         id: Uuid,
         description: &str,
-    ) -> Pin<Box<dyn Future<Output = Result<Todo, Self::Error>> + Send + '_>> {
+    ) -> BoxFuture<'_, Result<Todo, Self::Error>> {
         let db_context = db_context.clone();
         let description = description.to_string();
         Box::pin(async move {
@@ -44,7 +43,7 @@ impl TodoRepository for SqlxTodoRepository {
         &self,
         db_context: &Arc<Mutex<Self::DbContext>>,
         id: Uuid,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<Todo>, Self::Error>> + Send + '_>> {
+    ) -> BoxFuture<'_, Result<Option<Todo>, Self::Error>> {
         let db_context = db_context.clone();
         Box::pin(async move {
             let mut guard = db_context.lock().await;
@@ -64,7 +63,7 @@ impl TodoRepository for SqlxTodoRepository {
     fn find_all(
         &self,
         db_context: &Arc<Mutex<Self::DbContext>>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Todo>, Self::Error>> + Send + '_>> {
+    ) -> BoxFuture<'_, Result<Vec<Todo>, Self::Error>> {
         let db_context = db_context.clone();
         Box::pin(async move {
             let mut guard = db_context.lock().await;
@@ -87,7 +86,7 @@ impl TodoRepository for SqlxTodoRepository {
         &self,
         db_context: &Arc<Mutex<Self::DbContext>>,
         todo: Todo,
-    ) -> Pin<Box<dyn Future<Output = Result<Todo, Self::Error>> + Send + '_>> {
+    ) -> BoxFuture<'_, Result<Todo, Self::Error>> {
         let db_context = db_context.clone();
         Box::pin(async move {
             let mut guard = db_context.lock().await;
@@ -107,7 +106,7 @@ impl TodoRepository for SqlxTodoRepository {
         &self,
         db_context: &Arc<Mutex<Self::DbContext>>,
         id: Uuid,
-    ) -> Pin<Box<dyn Future<Output = Result<(), Self::Error>> + Send + '_>> {
+    ) -> BoxFuture<'_, Result<(), Self::Error>> {
         let db_context = db_context.clone();
         Box::pin(async move {
             let mut guard = db_context.lock().await;
