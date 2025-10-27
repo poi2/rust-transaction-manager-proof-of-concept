@@ -2,10 +2,9 @@ use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::PgPool;
 
-use domain::db_context::DbContext;
-use domain::transaction_manager::TransactionManager;
+use domain::{db_context::DbContext, transaction_manager::TransactionManager};
 
 use crate::db_context::SqlxDbContext;
 
@@ -30,8 +29,6 @@ impl TransactionManager for DBContext {
         Fut: Future<Output = Result<T, Self::Error>> + Send,
         T: Send,
     {
-        let tx = self.pool.begin().await?;
-
         // === SAFETY: ライフタイム transmute の技術的背景 ===
         //
         // **問題の本質:**
@@ -57,19 +54,22 @@ impl TransactionManager for DBContext {
         // - Rust言語レベルでのGAT制約緩和
         // - sqlxでのowned transactionサポート
         // - 新しいasync trait設計パターンの確立
-        let tx: Transaction<'static, Postgres> = unsafe { std::mem::transmute(tx) };
 
+        // TODO: 本当に必要？
+        // let tx: Transaction<'static, Postgres> = unsafe { std::mem::transmute(tx) };
+
+        let pool = self.pool.clone();
+        let tx = pool.begin().await?;
         let db_context = Arc::new(Mutex::new(SqlxDbContext::new(tx)));
-        let db_context_clone = db_context.clone();
 
-        match f(db_context).await {
+        match f(db_context.clone()).await {
             Ok(result) => {
-                let mut guard = db_context_clone.lock().await;
+                let mut guard = db_context.lock().await;
                 guard.commit().await?;
                 Ok(result)
             }
             Err(e) => {
-                let mut guard = db_context_clone.lock().await;
+                let mut guard = db_context.lock().await;
                 let _ = guard.rollback().await;
                 Err(e)
             }

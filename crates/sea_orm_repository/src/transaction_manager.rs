@@ -1,9 +1,8 @@
 use sea_orm::{Database, DatabaseConnection, TransactionTrait};
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 use tokio::sync::Mutex;
 
-use domain::db_context::DbContext;
-use domain::transaction_manager::TransactionManager;
+use domain::{db_context::DbContext, transaction_manager::TransactionManager};
 
 use crate::db_context::SeaOrmDbContext;
 
@@ -29,14 +28,13 @@ impl TransactionManager for SeaOrmTransactionManager {
     ) -> impl std::future::Future<Output = Result<T, Self::Error>> + Send
     where
         F: FnOnce(Arc<Mutex<Self::DbContext>>) -> Fut + Send,
-        Fut: std::future::Future<Output = Result<T, Self::Error>> + Send,
+        Fut: Future<Output = Result<T, Self::Error>> + Send,
         T: Send,
     {
         let db = self.db.clone();
         async move {
             let txn = db.begin().await?;
-            let db_context = SeaOrmDbContext::new(txn);
-            let db_context = Arc::new(Mutex::new(db_context));
+            let db_context = Arc::new(Mutex::new(SeaOrmDbContext::new(txn)));
 
             match f(db_context.clone()).await {
                 Ok(result) => {
