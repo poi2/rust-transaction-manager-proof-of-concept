@@ -34,6 +34,7 @@ https://martinfowler.com/eaaCatalog/unitOfWork.html
 つまり Rust でトランザクションの実装と活用を行うためには以下のトレードオフのすべてを満たす鞍点を見つける必要があります。
 
 - トランザクションのセッションの所有者はひとりだけしか存在してはいけない
+    - SeaORM でも sqlx でも crate が提供するトランザクション型は Clone を実装していない
 - それでいてトランザクションのセッションをクエリーを発行するたびに使い回せること（＝所有権に違反しないこと）
 - リソース効率を最適化するため、クエリーは非同期ランタイム上で実行すること（＝非同期の型パズルを解くこと）
 - Clean Architecture の依存性逆転の原則を遵守する抽象と実装を隔離を実現すること（＝抽象と実装の型パズルを解くこと）
@@ -46,18 +47,29 @@ https://martinfowler.com/eaaCatalog/unitOfWork.html
 この記事は Rust の実装に持っていきたいので Rust は当然入りますが、汎用的なアプリケーションで利用可能を目指したいので、Rust x DDD x Clean Architecture x エンタープライズアプリケーションという条件下で考えましょう。
 以下のような要件を置きます。
 
+## 機能要件（トランザクションの保存パターン）
+
 - 集約ごとに ACID トランザクションで保存できること（DDD からの要求）
-- 複数の集約を同一トランザクションで保存できること（エンタープライズアプリケーションでよくある要求）
-- 複数の集約を異なるトランザクションで保存できること（重たい処理を求められるアプリケーションでよくある要求）
+- 複数の集約を同一トランザクションで保存できること（強い整合性が必要な場合）
+- 複数の集約を異なるトランザクションで保存できること（パフォーマンス重視や結果整合性で十分な場合）
+
+## アーキテクチャー要件（Clean Architecture 準拠）
+
 - I/F は Domain layer に定義され、実装は Infrastructure layer に記述されること（Clean Architecture からの要求）
+
+## 非機能要件（パフォーマンス）
+
 - パフォーマンスを重視しクエリーは非同期ランタイム上で実行できること（アプリケーションの一般的な要求）
+
+## 言語固有の要件（Rust の制約）
+
 - 上記の要求をすべて解消しつつ、型パズルと所有権を満たす安全なコードを書くこと（Rust からの要求）
 
 # 実装
 
 すべての要求を満たすシンプルな実装を探す旅はとても長いので、自分が見出したやりかたを共有します。
 
-具体例があると説明書しやすいので、EC サイトで「注文の確定と、その商品の在庫を減らす」といユースケースを例に取りましょう。
+具体例があると説明書しやすいので、EC サイトで「注文の確定と、その商品の在庫を減らす」というユースケースを例に取りましょう。
 
 ## Application layer の実装
 
@@ -74,9 +86,9 @@ Clean Architecture でいう Application layer において以下のビジネス
 pub async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, Box<dyn std::error::Error>> {
     let order = Order::from(command)?;
 
-    let order = self.transaction_manager
+    let created_order = self.transaction_manager
         .transaction(|db_context| async move { // トランザクションを開始
-            // 在庫を取得
+            // 在庫を取得（排他ロックで同時更新を防止）
             let mut inventory = self
                 .inventory_repository
                 .find_by_item_id_for_update(&db_context, order.item_id())
@@ -94,16 +106,16 @@ pub async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, B
                 .create(&db_context, order)
                 .await?;
 
-            Ok(order) // コミット
+            Ok(order) // 処理成功時は自動コミット
         })
         .await?;
 
-    Ok(order)
+    Ok(created_order)
 }
 ```
 
-transaction_manager は DB コネクションを持つ構造体で、transaction() ではまず最初にトランザクションの開始を開始します。
-トランザクション内で実行したい処理は closure で外から注入できるようになっており、Application layer でビジネスロジックを定義して実行させます。
+transaction_manager は DB コネクションを持つ構造体で、transaction() ではまず最初にトランザクションを開始します。
+トランザクション内で実行したい処理は closure で外から注入でき、Application layer でビジネスロジックを定義して実行させます。
 closure には db_context 経由でトランザクションが渡されており、各リポジトリーは db_context から渡されるトランザクションを利用してクエリーを実行します。
 closure が成功すれば transaction() はコミットを実行し、失敗であればロールバックを実行します。
 
@@ -111,50 +123,9 @@ closure が成功すれば transaction() はコミットを実行し、失敗で
 
 ## Domain layer の実装
 
-### TransactionManager trait
-
-まずは TransactionManager trait から説明しましょう。
-
-Application layer で説明と重複しますが、transaction() で closure を引数で受け取ります。
-closure にはトランザクション内で実行したいビジネスロジックが定義されています。
-
-関連型の DbContext は抽象化したトランザクションを内部に保持する想定です。
-詳細は後述の説明を参照してください。
-
-DbContext を前述の closure に `Arc<Mutex<Self::DbContext>>` でラップして渡します。
-ここが重要なポイントではあるのですが、難しいポイントなので読み飛ばしていただいても構いませんが、詳細に説明すると以下のような話しです。
-
-考えれば当たり前ではあるのですが、トランザクションは同時に実行されると実行時エラーが発生する可能性があります。
-例えばですが、セッションが終了しているトランザクションにクエリーは実行しようとしてもエラーになります。
-Rust の場合、コンパイル時に安全性が担保されていることを要求されるため、実行時エラーが発生するようなコードはコンパイルエラーになります。
-
-それを回避するために、Arc, Mutex でラップすることで、相互排他的にしかトランザクションを利用できないことを型レベルで縛っています。
-
-```rust
-// domain_crate/src/transaction_manager.rs
-
-use std::future::Future;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
-use crate::db_context::DbContext;
-
-/// Transaction Manager trait
-pub trait TransactionManager {
-    type DbContext: DbContext;
-    type Error: Send + Sync + 'static;
-
-    fn transaction<T, F, Fut>(&self, f: F) -> impl Future<Output = Result<T, Self::Error>> + Send
-    where
-        F: FnOnce(Arc<Mutex<Self::DbContext>>) -> Fut + Send,
-        Fut: Future<Output = Result<T, Self::Error>> + Send,
-        T: Send;
-}
-```
-
 ### DbContext trait
 
-続いて DbContext です。
+まずは最も基本的な DbContext trait から説明しましょう。
 
 DbContext trait はトランザクションを保持する前提で、トランザクションの利用とコミット、ロールバックを行う機能を抽象化したものです。
 関連型の Tx は DB の種類、ORM の種類に依存した型を実装時に指定することを強制しています。
@@ -180,18 +151,95 @@ pub trait DbContext: Send + Sync {
 }
 ```
 
-### OrderRepository trait
+### Repository trait
 
-// TODO: ここ書き忘れている。
+続いて Repository trait について説明します。
+実際のユースケースに必要な２つの Repository trait を定義します。在庫操作用の InventoryRepository と注文操作用の OrderRepository です。
+
+```rust
+// domain_crate/src/order_repository.rs
+pub trait OrderRepository: Send + Sync {
+    type DbContext: DbContext;
+    type Error: Send + Sync + 'static;
+
+    fn create(
+        &self,
+        db_context: &Arc<Mutex<Self::DbContext>>,
+        order: Order,
+    ) -> impl Future<Output = Result<Order, Self::Error>> + Send
+    where
+        Self: Send;
+}
+```
+
+```rust
+// domain_crate/src/inventory_repository.rs
+pub trait InventoryRepository: Send + Sync {
+    type DbContext: DbContext;
+    type Error: Send + Sync + 'static;
+
+    fn find_by_item_id_for_update(
+        &self,
+        db_context: &Arc<Mutex<Self::DbContext>>,
+        item_id: ItemId,
+    ) -> impl Future<Output = Result<Inventory, Self::Error>> + Send
+    where
+        Self: Send;
+
+    fn update(
+        &self,
+        db_context: &Arc<Mutex<Self::DbContext>>,
+        inventory: Inventory,
+    ) -> impl Future<Output = Result<Inventory, Self::Error>> + Send
+    where
+        Self: Send;
+}
+```
+
+### TransactionManager trait
+
+続いて TransactionManager trait です。
+
+TransactionManager trait は、Application layer で使用したトランザクション管理の抽象 I/F です。
+
+関連型の DbContext は上記で説明したトランザクション抽象化の仕組みです。
+
+DbContext を前述の closure に `Arc<Mutex<Self::DbContext>>` でラップして渡します。
+これが Rust でトランザクション管理を実現する上での重要なポイントです。
+
+Rustでは、トランザクションのような共有リソースを複数箇所で同時に使用すると、コンパイル時に所有権エラーが発生します。
+Arc（参照カウンタ）と Mutex（排他制御）を組み合わせることで、型安全性を保ちながらトランザクションを複数の Repository で共有できます。
+
+```rust
+// domain_crate/src/transaction_manager.rs
+
+use std::future::Future;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+use crate::db_context::DbContext;
+
+/// Transaction Manager trait
+pub trait TransactionManager {
+    type DbContext: DbContext;
+    type Error: Send + Sync + 'static;
+
+    fn transaction<T, F, Fut>(&self, f: F) -> impl Future<Output = Result<T, Self::Error>> + Send
+    where
+        F: FnOnce(Arc<Mutex<Self::DbContext>>) -> Fut + Send,
+        Fut: Future<Output = Result<T, Self::Error>> + Send,
+        T: Send;
+}
+```
 
 ## Infrastructure layer の実装
 
-2025 年においては Rust の ORM は SeaORM と SQLx がでスタンダードな選択肢となっています。
+2025 年においては Rust の ORM は SeaORM と sqlx がデファクトスタンダードな選択肢となっています。
 どちらでも実装可能であることを示しましょう。
 
 ### SeaORM による実装
 
-### TransactionManager の実装
+#### TransactionManager の実装
 
 SeaOrmTransactionManager は内部に DB コネクションを保持し、TransactionManager を実装しています。
 
@@ -258,10 +306,11 @@ impl TransactionManager for SeaOrmTransactionManager {
 }
 ```
 
-### DbContext の実装
+#### DbContext の実装
 
 SeaOrmDbContext は内部にトランザクションを持つ構造体で、DbContext を実装しています。
-生成時にはトランザクションは必ずあるのですが、コミットやロールバックを実行するとトランザクションのセッションは失われてしまうため、トランザクションはオプショナルな状態で保持せざるを得ない状況にあります。
+生成時にはトランザクションは必ずあるのですが、コミットやロールバックを実行するとトランザクションのセッションは失われてしまいます。
+実行時にトランザクションのセッションが取得できるパターンとできないパターンの両方があり得るため、トランザクションはオプショナルな状態で保持せざるを得ない状況にあります。
 
 また、今回は説明のために anyhow による簡易なエラーハンドリングにしています。
 production で利用する際は thiserror を使って具体的なエラーにマッピングし、適切にエラーハンドリングできるようにすることを強くおすすめします。
@@ -320,22 +369,17 @@ impl DbContext for SeaOrmDbContext {
 }
 ```
 
-### Repository の実装
+#### Repository の実装
 
 Repository の実装です。
+在庫操作用の InventoryRepository と注文操作用の OrderRepository です。
+
 db_context からトランザクションを取り出して、SeaORM 経由で INSERT を実行します。
 
+TODO: コードを書いてちゃんと確認をする。
+
 ```rust
-use futures::future::BoxFuture;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use uuid::Uuid;
-
-use domain::{db_context::DbContext, order_aggregate::Order, order_repository::OrderRepository};
-
-use crate::{db_context::SeaOrmDbContext, order_entity::ActiveModel};
-
+// sea_orm_repository/src/order_repository.rs
 #[derive(Clone)]
 pub struct SeaOrmOrderRepository;
 
@@ -343,12 +387,12 @@ impl OrderRepository for SeaOrmOrderRepository {
     type DbContext = SeaOrmDbContext;
     type Error = anyhow::Error;
 
-    fn create(
+    async fn create(
         &self,
         db_context: &Arc<Mutex<Self::DbContext>>,
         order: Order,
-    ) -> BoxFuture<'_, Result<Order, Self::Error>> {
-        let mut guard = db_context.lock().await;
+    ) -> Result<Order, Self::Error> {
+        let mut guard = db_context.lock().await?;
         let txn = guard.get_transaction();
 
         let order = ActiveModel {
@@ -364,109 +408,267 @@ impl OrderRepository for SeaOrmOrderRepository {
 }
 ```
 
-// TODO: ここまで書いた。
-
-# どのような単位で一貫した状態を維持する必要があるのか？
-
-データを一貫した状態を維持することは必須な機能ですが、どのデータの単位で一貫した状態を維持するかはアプリケーションやユースケースごとに異なります。
-よくあるパターンは以下となります。
-
-- [集約単体パターン] 集約単体で保存する
-- [複数の異なる集約一括パターン] 複数の異なる集約を一括で保存する
-
-集約単体パターンだけサポートすればよい場合は、集約に対応する Repository 単位でトランザクション管理を維持すれば良いです。
-シンプルなアプリケーションであれば、集約単位で保存し、その単位でトランザクションを実行するだけで十分です。
-
-しかし、アプリケーションの成長と共に複数の異なる集約を一括で保存する必要が生じるかもしれません。
-そうでなくても、エンタープライズアプリケーションにおいては複数の異なる集約を一括で保存が必要となることが多々あります。
-そのような場合は複数の異なる集約一括パターンをサポートする必要があります。
-
-# 前提
-
-本記事ではデータの活用（Read/Write）を Repository パターンにおける実装を行います。
-依存性逆転の原則を重んじ、Repository の抽象と具象を分離し、アプリケーションにおいては抽象に依存する方針を取ります。
-
-アプリケーションやユースケースにおいては、具象に直接依存することが許容されるケースがあります。
-その場合、本記事で提案する実装は過剰な複雑性を持ち込むことにつながるリスクをはらみます。
-
-# 集約単体パターンの実装
-
-## 集約単体パターンの擬似コードによる説明
-
-集約単体での保存をサポートすればよい場合、Repository のメソッド単位でトランザクションを用意すればよいです。
-具体的には以下のような使い方です。
-
 ```rust
-// Database Client を内部で持つ todo_repository を生成する。
-let todo_repository = TodoRepositoryImpl::new(database_client);
+// sea_orm_repository/src/inventory_repository.rs
+#[derive(Clone)]
+pub struct SeaOrmInventoryRepository;
 
-// TodoRepository の create メソッドの内部で transaction を展開する。
-todo_repository.create(todo);
-```
+impl InventoryRepository for SeaOrmInventoryRepository {
+    type DbContext = SeaOrmDbContext;
+    type Error = anyhow::Error;
 
-Repository の抽象は以下です。
+    async fn find_by_item_id_for_update(
+        &self,
+        db_context: &Arc<Mutex<Self::DbContext>>,
+        item_id: ItemId,
+    ) -> Result<Inventory, Self::Error> {
+        let mut guard = db_context.lock().await?;
+        let txn = guard.get_transaction();
 
-```rust
-use async_trait::async_trait;
+        let result = InventoryEntity::find()
+            .filter(Column::Id.eq(item_id))
+            .one(txn)
+            .await?;
 
-#[async_trait]
-pub trait TodoRepository: Send + Sync {
-    async fn create(&self, todo: Todo) -> Result<Todo, TodoRepositoryError>;
-}
-```
+        Ok(result.map(|model| Inventory::new(result.id, result.quantity)))
+    }
 
-Repository の具象は以下です。
-具象と言っていますが、実際に動作するコードは後述の章を参考にしてください。
+    async fn update(
+        &self,
+        db_context: &Arc<Mutex<Self::DbContext>>,
+        inventory: Inventory,
+    ) -> Result<Inventory, Self::Error> {
+        let mut guard = db_context.lock().await?;
+        let txn = guard.get_transaction();
 
-```rust
-use async_trait::async_trait;
+        let active_inventory = ActiveModel {
+            id: Set(inventory.id()),
+            quantity: Set(inventory.quantity().i32),
+        };
 
-#[derive(Debug, Clone)]
-pub struct TodoRepositoryImpl {
-    database_client: DatabaseClient,
-}
+        active_inventory.update(txn).await?;
 
-#[async_trait]
-pub trait TodoRepository: Send + Sync {
-    async fn create(&self, todo: Todo) -> Result<Todo, TodoRepositoryError> {
-        // 内部の database_client からトランザクションを展開する。
-        let todo = self.database_client.transaction({
-            // 実際には ORM のコードを利用して具体的な SQL 操作を実行する。
-        }).await?
-
-        Ok(todo)
+        Ok(inventory)
     }
 }
 ```
 
-## 集約単体パターンの SeaORM による実装
+### sqlx による実装
 
-TODO
+#### TransactionManager の実装
 
-## 集約単体パターンの SQLx による実装
+sqlxTransactionManager は内部に PostgreSQL のコネクションプールを保持し、TransactionManager を実装しています。
 
-TODO
+transaction() 内部では pool.begin() でトランザクションを生成し、SqlxDbContext でラップします。
+SeaORMの実装と同様に `Arc<Mutex<...>>` でラップすることで、相互排他的なアクセスを強制します。
 
-## 集約単体パターンのまとめ
+```rust
+use std::future::Future;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
-- pros
-    - 実装が素直であり実装が容易である（複雑な型パズルや所有権の問題が発生しない）
-- cons
-    - 複数の異なる集約を一括で保存することが必要になると、大きなリファクタリングが必要となる
+use sqlx::PgPool;
+use domain::{db_context::DbContext, transaction_manager::TransactionManager};
+use crate::db_context::SqlxDbContext;
 
-# 複数の異なる集約一括パターンの実装
+/// sqlx TransactionManager implementation using PostgreSQL
+pub struct SqlxTransactionManager {
+    pool: PgPool,
+}
 
-## 複数の異なる集約一括パターンの擬似コードによる説明
+impl SqlxTransactionManager {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
 
-## 複数の異なる集約一括パターンの SeaORM による実装
+impl TransactionManager for SqlxTransactionManager {
+    type DbContext = SqlxDbContext<'static>;
+    type Error = anyhow::Error;
 
-## 複数の異なる集約一括パターンの SQLx による実装
+    async fn transaction<T, F, Fut>(&self, f: F) -> Result<T, Self::Error>
+    where
+        F: FnOnce(Arc<Mutex<Self::DbContext>>) -> Fut + Send,
+        Fut: Future<Output = Result<T, Self::Error>> + Send,
+        T: Send,
+    {
+        let pool = self.pool.clone();
+        let tx = pool.begin().await?;
+        let db_context = Arc::new(Mutex::new(SqlxDbContext::new(tx)));
 
-## 複数の異なる集約一括パターンのまとめ
+        match f(db_context.clone()).await {
+            Ok(result) => {
+                let mut guard = db_context.lock().await;
+                guard.commit().await?;
+                Ok(result)
+            }
+            Err(e) => {
+                let mut guard = db_context.lock().await;
+                let _ = guard.rollback().await;
+                Err(e)
+            }
+        }
+    }
+}
+```
 
-- pros
-    - 実装はとても素直だが、複雑な型パズルや所有権の問題を解消する必要がある
-- cons
+#### DbContext の実装
 
+SqlxDbContext は内部に sqlx の Transaction を持つ構造体で、DbContext を実装しています。
+ライフタイム管理が必要な点が SeaORM と異なりますが、基本的な構造は同じです。
 
+```rust
+use sqlx::{Postgres, Transaction};
+use domain::db_context::DbContext;
 
+/// sqlx::Transaction wrapper for PostgreSQL
+pub struct SqlxDbContext<'a> {
+    transaction: Option<Transaction<'a, Postgres>>,
+}
+
+impl<'a> SqlxDbContext<'a> {
+    pub fn new(transaction: Transaction<'a, Postgres>) -> Self {
+        Self {
+            transaction: Some(transaction),
+        }
+    }
+}
+
+impl<'a> DbContext for SqlxDbContext<'a> {
+    type Tx = Transaction<'a, Postgres>;
+    type Error = anyhow::Error;
+
+    fn get_transaction(&mut self) -> &mut Self::Tx {
+        self.transaction
+            .as_mut()
+            .expect("Transaction already consumed")
+    }
+
+    async fn commit(&mut self) -> Result<(), Self::Error> {
+        if let Some(tx) = self.transaction.take() {
+            tx.commit().await?;
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Transaction already consumed"))
+        }
+    }
+
+    async fn rollback(&mut self) -> Result<(), Self::Error> {
+        if let Some(tx) = self.transaction.take() {
+            tx.rollback().await?;
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Transaction already consumed"))
+        }
+    }
+}
+```
+
+#### Repository の実装
+
+Repository の実装では、sqlx の query マクロを使用して型安全な SQL を実行します。
+db_context からトランザクションを取り出して、sqlx 経由で直接 SQL を実行します。
+
+```rust
+// sqlx_repository/src/order_repository.rs
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use uuid::Uuid;
+
+use domain::db_context::DbContext;
+use domain::{order_aggregate::Order, order_repository::OrderRepository};
+
+use crate::db_context::SqlxDbContext;
+
+/// OrderRepository implementation using sqlx
+#[derive(Clone)]
+pub struct SqlxOrderRepository;
+
+impl OrderRepository for SqlxOrderRepository {
+    type DbContext = SqlxDbContext<'static>;
+    type Error = anyhow::Error;
+
+    async fn create(
+        &self,
+        db_context: &Arc<Mutex<Self::DbContext>>,
+        order: Order,
+    ) -> Result<Order, Self::Error> {
+        let mut guard = db_context.lock().await;
+        let txn = guard.get_transaction();
+
+        sqlx::query("INSERT INTO orders (id, item_id, quantity) VALUES ($1, $2, $3)")
+            .bind(order.id())
+            .bind(order.item_id())
+            .bind(order.quantity())
+            .execute(&mut **txn)
+            .await?;
+
+        Ok(order)
+    }
+}
+```
+
+```rust
+// sqlx_repository/src/inventory_repository.rs
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+use domain::db_context::DbContext;
+use domain::{inventory_aggregate::Inventory, inventory_repository::InventoryRepository, item_id::ItemId};
+
+use crate::db_context::SqlxDbContext;
+
+/// InventoryRepository implementation using sqlx
+#[derive(Clone)]
+pub struct SqlxInventoryRepository;
+
+impl InventoryRepository for SqlxInventoryRepository {
+    type DbContext = SqlxDbContext<'static>;
+    type Error = anyhow::Error;
+
+    async fn find_by_item_id_for_update(
+        &self,
+        db_context: &Arc<Mutex<Self::DbContext>>,
+        item_id: ItemId,
+    ) -> Result<Inventory, Self::Error> {
+        let mut guard = db_context.lock().await;
+        let txn = guard.get_transaction();
+
+        let result = sqlx::query_as::<_, (ItemId, i32)>(
+            "SELECT item_id, quantity FROM inventory WHERE item_id = $1 FOR UPDATE"
+        )
+        .bind(item_id)
+        .fetch_one(&mut **txn)
+        .await?;
+
+        Ok(Inventory::new(result.0, result.1))
+    }
+
+    async fn update(
+        &self,
+        db_context: &Arc<Mutex<Self::DbContext>>,
+        inventory: Inventory,
+    ) -> Result<Inventory, Self::Error> {
+        let mut guard = db_context.lock().await;
+        let txn = guard.get_transaction();
+
+        sqlx::query("UPDATE inventory SET quantity = $1 WHERE item_id = $2")
+            .bind(inventory.quantity())
+            .bind(inventory.item_id())
+            .execute(&mut **txn)
+            .await?;
+
+        Ok(inventory)
+    }
+}
+```
+
+## まとめ
+
+Rust でのトランザクション管理が難しいという課題は SeaORM や sqlx のトランザクションが安易な Clone やライフタイムを回避できないという難しさがあることを示しました。
+`Arc<Mutex<...>>` を使った相互排他的なアクセス制御によって、同一トランザクション内で複数の Repository のクエリー実行をサポートするパターンを示しました。
+また、このトランザクションの管理パターンは、ORM によらず汎用的に適用できることを示しました。
+
+さらに `Arc<Mutex<...>>` は複数の所有者が安全に共有データを参照・変更する必要がある場合に必ず必要になるパターンです。
+トランザクション以外にも Rust でマルチスレッドで利用されるデータを管理する際には登場します。
+トランザクションと同じように抽象化することで型パズルを乗り越えることができます。

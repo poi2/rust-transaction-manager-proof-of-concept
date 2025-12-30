@@ -75,3 +75,112 @@ DbContext の trait は domain に書かれており、SqlxDbContext が infrast
 - fmt, clippy はすべて通す
 
 を守ってください。
+
+----
+
+2025-12-30
+いったん、不要なブロックを移動させた。
+
+```md
+# どのような単位で一貫した状態を維持する必要があるのか？
+
+データを一貫した状態を維持することは必須な機能ですが、どのデータの単位で一貫した状態を維持するかはアプリケーションやユースケースごとに異なります。
+よくあるパターンは以下となります。
+
+- [集約単体パターン] 集約単体で保存する
+- [複数の異なる集約一括パターン] 複数の異なる集約を一括で保存する
+
+集約単体パターンだけサポートすればよい場合は、集約に対応する Repository 単位でトランザクション管理を維持すれば良いです。
+シンプルなアプリケーションであれば、集約単位で保存し、その単位でトランザクションを実行するだけで十分です。
+
+しかし、アプリケーションの成長と共に複数の異なる集約を一括で保存する必要が生じるかもしれません。
+そうでなくても、エンタープライズアプリケーションにおいては複数の異なる集約を一括で保存が必要となることが多々あります。
+そのような場合は複数の異なる集約一括パターンをサポートする必要があります。
+
+# 前提
+
+本記事ではデータの活用（Read/Write）を Repository パターンにおける実装を行います。
+依存性逆転の原則を重んじ、Repository の抽象と具象を分離し、アプリケーションにおいては抽象に依存する方針を取ります。
+
+アプリケーションやユースケースにおいては、具象に直接依存することが許容されるケースがあります。
+その場合、本記事で提案する実装は過剰な複雑性を持ち込むことにつながるリスクをはらみます。
+
+# 集約単体パターンの実装
+
+## 集約単体パターンの擬似コードによる説明
+
+集約単体での保存をサポートすればよい場合、Repository のメソッド単位でトランザクションを用意すればよいです。
+具体的には以下のような使い方です。
+
+```rust
+// Database Client を内部で持つ todo_repository を生成する。
+let todo_repository = TodoRepositoryImpl::new(database_client);
+
+// TodoRepository の create メソッドの内部で transaction を展開する。
+todo_repository.create(todo);
+```
+
+Repository の抽象は以下です。
+
+```rust
+use async_trait::async_trait;
+
+#[async_trait]
+pub trait TodoRepository: Send + Sync {
+    async fn create(&self, todo: Todo) -> Result<Todo, TodoRepositoryError>;
+}
+```
+
+Repository の具象は以下です。
+具象と言っていますが、実際に動作するコードは後述の章を参考にしてください。
+
+```rust
+use async_trait::async_trait;
+
+#[derive(Debug, Clone)]
+pub struct TodoRepositoryImpl {
+    database_client: DatabaseClient,
+}
+
+#[async_trait]
+pub trait TodoRepository: Send + Sync {
+    async fn create(&self, todo: Todo) -> Result<Todo, TodoRepositoryError> {
+        // 内部の database_client からトランザクションを展開する。
+        let todo = self.database_client.transaction({
+            // 実際には ORM のコードを利用して具体的な SQL 操作を実行する。
+        }).await?
+
+        Ok(todo)
+    }
+}
+```
+
+## 集約単体パターンの SeaORM による実装
+
+TODO
+
+## 集約単体パターンの SQLx による実装
+
+TODO
+
+## 集約単体パターンのまとめ
+
+- pros
+    - 実装が素直であり実装が容易である（複雑な型パズルや所有権の問題が発生しない）
+- cons
+    - 複数の異なる集約を一括で保存することが必要になると、大きなリファクタリングが必要となる
+
+# 複数の異なる集約一括パターンの実装
+
+## 複数の異なる集約一括パターンの擬似コードによる説明
+
+## 複数の異なる集約一括パターンの SeaORM による実装
+
+## 複数の異なる集約一括パターンの SQLx による実装
+
+## 複数の異なる集約一括パターンのまとめ
+
+- pros
+    - 実装はとても素直だが、複雑な型パズルや所有権の問題を解消する必要がある
+- cons
+```
