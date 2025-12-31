@@ -1,0 +1,30 @@
+[package]
+name = "application"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sea_orm_app"
+path = "src/bin/sea_orm_app.rs"
+
+[[bin]]
+name = "sqlx_app"
+path = "src/bin/sqlx_app.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+domain = { path = "../domain" }
+infrastructure = { path = "../infrastructure", features = ["sea-orm-impl", "sqlx-impl"] }
+use_case = { path = "../use_case" }
+sea-orm = { version = "1.1.1", features = [
+  "sqlx-postgres",
+  "runtime-tokio-rustls",
+  "macros",
+] }
+sqlx = { version = "0.8", features = [
+  "postgres",
+  "uuid",
+  "runtime-tokio-rustls",
+] }
+tokio = { workspace = true }
+uuid = { workspace = true }

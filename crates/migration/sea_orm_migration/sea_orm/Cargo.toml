@@ -1,0 +1,21 @@
+[workspace]
+members = [".", "migration"]
+
+[package]
+name = "sea_orm_migration_runner"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-std = { version = "1", features = ["attributes", "tokio1"] }
+migration = { path = "migration" }
+sea-orm = { version = "1.1.1", features = [
+  "sqlx-postgres",
+  "runtime-tokio-rustls",
+  "macros",
+] }
+sea-orm-migration = { version = "1.1.1", features = [
+  "sqlx-postgres",
+  "runtime-tokio-rustls",
+] }
+tokio = { version = "1", features = ["full"] }
