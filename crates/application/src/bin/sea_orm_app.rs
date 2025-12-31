@@ -5,11 +5,12 @@ use domain::{item::aggregate::ItemId, order::aggregate::CreateOrderCommand};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let database_url = env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:password@localhost:5432/poc_transaction_manager".to_string());
+    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
+        "postgres://postgres:password@localhost:5432/poc_transaction_manager".to_string()
+    });
 
     println!("Starting SeaORM application...");
-    println!("Database URL: {}", database_url);
+    println!("Database URL: {database_url}");
 
     let di = SeaOrmDependencyInjection::new(&database_url).await?;
 
@@ -20,14 +21,17 @@ async fn main() -> Result<(), anyhow::Error> {
         quantity: 5,
     };
 
-    println!("Creating order for item: {}, quantity: {}", item_id, command.quantity);
+    println!(
+        "Creating order for item: {}, quantity: {}",
+        item_id, command.quantity
+    );
 
     match di.order_management_use_case.create_order(command).await {
         Ok(order) => {
-            println!("Order created successfully: {:?}", order);
+            println!("Order created successfully: {order:?}");
         }
         Err(e) => {
-            println!("Failed to create order: {}", e);
+            println!("Failed to create order: {e}");
         }
     }
 

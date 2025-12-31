@@ -1,5 +1,5 @@
-use sqlx::{Postgres, Transaction};
 use domain::db_context::DbContext;
+use sqlx::{Postgres, Transaction};
 
 /// sqlx::Transaction wrapper for PostgreSQL
 pub struct SqlxDbContext<'a> {

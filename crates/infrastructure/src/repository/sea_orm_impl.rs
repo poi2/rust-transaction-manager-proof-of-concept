@@ -4,6 +4,6 @@ pub mod order_repository;
 pub mod transaction_manager;
 
 pub use db_context::*;
-pub use inventory_repository::*;
-pub use order_repository::*;
+pub use inventory_repository::SeaOrmInventoryRepository;
+pub use order_repository::SeaOrmOrderRepository;
 pub use transaction_manager::*;

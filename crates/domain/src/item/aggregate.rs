@@ -3,6 +3,12 @@ use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ItemId(Uuid);
 
+impl Default for ItemId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ItemId {
     pub fn new() -> Self {
         Self(Uuid::new_v4())
@@ -14,10 +20,6 @@ impl ItemId {
 
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
-    }
-
-    pub fn to_string(&self) -> String {
-        self.0.to_string()
     }
 }
 

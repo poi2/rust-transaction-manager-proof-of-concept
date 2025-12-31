@@ -1,9 +1,5 @@
 #[cfg(test)]
 mod integration_tests {
-    use std::sync::Arc;
-    use testcontainers::clients::Cli;
-    use testcontainers_modules::postgres::Postgres;
-    use tokio::sync::Mutex;
 
     use domain::{
         inventory::aggregate::Inventory,
@@ -18,18 +14,18 @@ mod integration_tests {
     async fn test_domain_aggregate_integration() {
         // Test that our domain aggregates work together properly
         let item_id = ItemId::new();
-        
+
         // Create inventory
         let mut inventory = Inventory::new(item_id.clone(), 10).unwrap();
         assert_eq!(inventory.quantity(), 10);
-        
+
         // Create order
         let command = CreateOrderCommand {
             item_id: item_id.clone(),
             quantity: 3,
         };
         let order = Order::from(command).unwrap();
-        
+
         // Simulate inventory update
         inventory.decrease_stock(order.quantity()).unwrap();
         assert_eq!(inventory.quantity(), 7);
@@ -39,13 +35,13 @@ mod integration_tests {
     async fn test_insufficient_stock_scenario() {
         let item_id = ItemId::new();
         let mut inventory = Inventory::new(item_id.clone(), 2).unwrap();
-        
+
         let command = CreateOrderCommand {
             item_id,
             quantity: 5,
         };
         let order = Order::from(command).unwrap();
-        
+
         // Should fail due to insufficient stock
         let result = inventory.decrease_stock(order.quantity());
         assert!(result.is_err());

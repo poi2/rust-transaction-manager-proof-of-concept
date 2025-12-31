@@ -1,12 +1,16 @@
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, ActiveModelTrait, Set};
 
-use domain::{
-    order::{aggregate::{Order, OrderId}, repository::OrderRepository},
-    item::aggregate::ItemId,
-};
 use crate::repository::sea_orm_impl::db_context::SeaOrmDbContext;
+use domain::{
+    db_context::DbContext,
+    item::aggregate::ItemId,
+    order::{
+        aggregate::{Order, OrderId},
+        repository::OrderRepository,
+    },
+};
 
 // SeaORM entity definitions
 use sea_orm::entity::prelude::*;
@@ -41,7 +45,7 @@ impl OrderRepository for SeaOrmOrderRepository {
         let txn = guard.get_transaction();
 
         let result = Entity::find()
-            .filter(Column::Id.eq(id.as_uuid().clone()))
+            .filter(Column::Id.eq(*id.as_uuid()))
             .one(txn)
             .await?;
 

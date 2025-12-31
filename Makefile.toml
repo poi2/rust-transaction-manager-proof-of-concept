@@ -1,0 +1,169 @@
+[config]
+default_to_workspace = false
+
+[env]
+DATABASE_URL = "postgres://postgres:password@localhost:5432/poc_transaction_manager"
+RUST_LOG = "debug"
+
+# Docker 管理
+[tasks.docker-up]
+description = "Start PostgreSQL with Docker Compose"
+command = "docker"
+args = ["compose", "up", "-d"]
+
+[tasks.docker-down]
+description = "Stop PostgreSQL Docker containers"
+command = "docker"
+args = ["compose", "down"]
+
+[tasks.docker-logs]
+description = "Show PostgreSQL logs"
+command = "docker"
+args = ["compose", "logs", "-f", "db"]
+
+# Migration 管理
+[tasks.migrate-tables]
+description = "Create database tables for testing"
+dependencies = ["docker-up"]
+script = [
+    '''
+    echo "Creating database tables..."
+    psql ${DATABASE_URL:-postgres://postgres:password@localhost:5432/poc_transaction_manager} -c "
+    CREATE TABLE IF NOT EXISTS poc_for_sqlx.inventory (
+        item_id UUID PRIMARY KEY,
+        quantity INTEGER NOT NULL
+    );
+    
+    CREATE TABLE IF NOT EXISTS poc_for_sqlx.orders (
+        id UUID PRIMARY KEY,
+        item_id UUID NOT NULL,
+        quantity INTEGER NOT NULL
+    );
+    
+    CREATE TABLE IF NOT EXISTS poc_for_sea_orm.inventory (
+        item_id UUID PRIMARY KEY,
+        quantity INTEGER NOT NULL
+    );
+    
+    CREATE TABLE IF NOT EXISTS poc_for_sea_orm.orders (
+        id UUID PRIMARY KEY,
+        item_id UUID NOT NULL,
+        quantity INTEGER NOT NULL
+    );
+    "
+    echo "Database tables created successfully!"
+    '''
+]
+
+[tasks.migrate-all]
+description = "Setup database tables (temporary migration)"
+dependencies = ["migrate-tables"]
+
+# Database 管理
+[tasks.db-reset]
+description = "Reset database (drop and recreate schemas)"
+script = [
+    "psql ${DATABASE_URL} -c \"DROP SCHEMA IF EXISTS poc_for_sea_orm CASCADE;\"",
+    "psql ${DATABASE_URL} -c \"DROP SCHEMA IF EXISTS poc_for_sqlx CASCADE;\"",
+    "psql ${DATABASE_URL} -c \"CREATE SCHEMA poc_for_sea_orm;\"",
+    "psql ${DATABASE_URL} -c \"CREATE SCHEMA poc_for_sqlx;\""
+]
+dependencies = ["docker-up"]
+
+[tasks.db-setup]
+description = "Complete database setup (reset + migrate)"
+dependencies = ["db-reset", "migrate-all"]
+
+# テスト管理
+[tasks.test]
+description = "Run tests with nextest"
+command = "cargo"
+args = ["nextest", "run"]
+dependencies = ["db-setup"]
+
+[tasks.test-unit]
+description = "Run unit tests only"
+command = "cargo"
+args = ["nextest", "run", "--lib"]
+
+[tasks.test-db]
+description = "Run database integration tests"
+dependencies = ["db-setup"]
+env = { DATABASE_URL = "postgres://postgres:password@localhost:5432/poc_transaction_manager" }
+command = "cargo"
+args = ["nextest", "run", "--run-ignored", "all"]
+
+[tasks.test-watch]
+description = "Watch and run tests on file changes"
+command = "cargo"
+args = ["watch", "-x", "nextest run"]
+
+# ビルド管理
+[tasks.build]
+description = "Build all crates"
+command = "cargo"
+args = ["build"]
+
+[tasks.build-release]
+description = "Build release version"
+command = "cargo"
+args = ["build", "--release"]
+
+# アプリケーション実行
+[tasks.run-sea-orm]
+description = "Run SeaORM application"
+command = "cargo"
+args = ["run", "--bin", "sea_orm_app"]
+dependencies = ["db-setup"]
+
+[tasks.run-sqlx]
+description = "Run sqlx application"
+command = "cargo"
+args = ["run", "--bin", "sqlx_app"]
+dependencies = ["db-setup"]
+
+# コード品質
+[tasks.fmt]
+description = "Format code"
+command = "cargo"
+args = ["fmt"]
+
+[tasks.clippy]
+description = "Run clippy linter"
+command = "cargo"
+args = ["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+
+[tasks.check]
+description = "Quick compile check"
+command = "cargo"
+args = ["check", "--all"]
+
+[tasks.audit]
+description = "Audit dependencies for security vulnerabilities"
+command = "cargo"
+args = ["audit"]
+
+# 開発環境セットアップ
+[tasks.dev-setup]
+description = "Complete development environment setup"
+dependencies = ["docker-up", "db-setup", "test-unit"]
+
+# CI/CD用タスク
+[tasks.ci]
+description = "CI pipeline (format, clippy, test)"
+dependencies = ["fmt", "clippy", "test"]
+
+# クリーンアップ
+[tasks.clean]
+description = "Clean build artifacts"
+command = "cargo"
+args = ["clean"]
+
+[tasks.clean-all]
+description = "Clean everything (build + docker)"
+dependencies = ["clean", "docker-down"]
+
+# デモ用
+[tasks.demo]
+description = "Run demonstration of both implementations"
+dependencies = ["db-setup", "run-sea-orm", "run-sqlx"]

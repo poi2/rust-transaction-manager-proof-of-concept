@@ -1,12 +1,16 @@
+use sqlx::Row;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use sqlx::Row;
 
-use domain::{
-    order::{aggregate::{Order, OrderId}, repository::OrderRepository},
-    item::aggregate::ItemId,
-};
 use crate::repository::sqlx_impl::db_context::SqlxDbContext;
+use domain::{
+    db_context::DbContext,
+    item::aggregate::ItemId,
+    order::{
+        aggregate::{Order, OrderId},
+        repository::OrderRepository,
+    },
+};
 
 #[derive(Clone)]
 pub struct SqlxOrderRepository;
@@ -23,23 +27,19 @@ impl OrderRepository for SqlxOrderRepository {
         let mut guard = db_context.lock().await;
         let txn = guard.get_transaction();
 
-        let result = sqlx::query(
-            "SELECT id, item_id, quantity FROM poc_for_sqlx.orders WHERE id = $1"
-        )
-        .bind(id.as_uuid())
-        .fetch_optional(&mut **txn)
-        .await?;
+        let result =
+            sqlx::query("SELECT id, item_id, quantity FROM poc_for_sqlx.orders WHERE id = $1")
+                .bind(id.as_uuid())
+                .fetch_optional(&mut **txn)
+                .await?;
 
         match result {
             Some(row) => {
                 let id: uuid::Uuid = row.try_get("id")?;
                 let item_id: uuid::Uuid = row.try_get("item_id")?;
                 let quantity: i32 = row.try_get("quantity")?;
-                let order = Order::new(
-                    OrderId::from_uuid(id),
-                    ItemId::from_uuid(item_id),
-                    quantity,
-                )?;
+                let order =
+                    Order::new(OrderId::from_uuid(id), ItemId::from_uuid(item_id), quantity)?;
                 Ok(Some(order))
             }
             None => Ok(None),

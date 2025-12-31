@@ -22,6 +22,7 @@ uuid = { workspace = true }
 [dev-dependencies]
 testcontainers = "0.15"
 testcontainers-modules = { version = "0.3", features = ["postgres"] }
+tokio-test = "0.4"
 
 [features]
 default = ["sea-orm-impl", "sqlx-impl"]

@@ -1,12 +1,13 @@
+use sqlx::Row;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use sqlx::Row;
 
+use crate::repository::sqlx_impl::db_context::SqlxDbContext;
 use domain::{
+    db_context::DbContext,
     inventory::{aggregate::Inventory, repository::InventoryRepository},
     item::aggregate::ItemId,
 };
-use crate::repository::sqlx_impl::db_context::SqlxDbContext;
 
 #[derive(Clone)]
 pub struct SqlxInventoryRepository;
@@ -24,7 +25,7 @@ impl InventoryRepository for SqlxInventoryRepository {
         let txn = guard.get_transaction();
 
         let result = sqlx::query(
-            "SELECT item_id, quantity FROM poc_for_sqlx.inventory WHERE item_id = $1 FOR UPDATE"
+            "SELECT item_id, quantity FROM poc_for_sqlx.inventory WHERE item_id = $1 FOR UPDATE",
         )
         .bind(item_id.as_uuid())
         .fetch_optional(&mut **txn)
@@ -49,12 +50,11 @@ impl InventoryRepository for SqlxInventoryRepository {
         let mut guard = db_context.lock().await;
         let txn = guard.get_transaction();
 
-        let result = sqlx::query(
-            "SELECT item_id, quantity FROM poc_for_sqlx.inventory WHERE item_id = $1"
-        )
-        .bind(item_id.as_uuid())
-        .fetch_optional(&mut **txn)
-        .await?;
+        let result =
+            sqlx::query("SELECT item_id, quantity FROM poc_for_sqlx.inventory WHERE item_id = $1")
+                .bind(item_id.as_uuid())
+                .fetch_optional(&mut **txn)
+                .await?;
 
         match result {
             Some(row) => {

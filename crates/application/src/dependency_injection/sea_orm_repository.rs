@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use infrastructure::repository::sea_orm_impl::{
-    SeaOrmTransactionManager, SeaOrmInventoryRepository, SeaOrmOrderRepository,
+    SeaOrmInventoryRepository, SeaOrmOrderRepository, SeaOrmTransactionManager,
 };
 use use_case::order_management::OrderManagementUseCase;
 

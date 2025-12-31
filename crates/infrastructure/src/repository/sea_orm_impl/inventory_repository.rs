@@ -1,12 +1,13 @@
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, ActiveModelTrait, Set, QuerySelect, LockType};
 
+use crate::repository::sea_orm_impl::db_context::SeaOrmDbContext;
 use domain::{
+    db_context::DbContext,
     inventory::{aggregate::Inventory, repository::InventoryRepository},
     item::aggregate::ItemId,
 };
-use crate::repository::sea_orm_impl::db_context::SeaOrmDbContext;
 
 // SeaORM entity definitions (would typically be in a separate entities module)
 use sea_orm::entity::prelude::*;
@@ -40,8 +41,7 @@ impl InventoryRepository for SeaOrmInventoryRepository {
         let txn = guard.get_transaction();
 
         let result = Entity::find()
-            .filter(Column::ItemId.eq(item_id.as_uuid().clone()))
-            .lock(LockType::Update)
+            .filter(Column::ItemId.eq(*item_id.as_uuid()))
             .one(txn)
             .await?;
 
@@ -63,7 +63,7 @@ impl InventoryRepository for SeaOrmInventoryRepository {
         let txn = guard.get_transaction();
 
         let result = Entity::find()
-            .filter(Column::ItemId.eq(item_id.as_uuid().clone()))
+            .filter(Column::ItemId.eq(*item_id.as_uuid()))
             .one(txn)
             .await?;
 

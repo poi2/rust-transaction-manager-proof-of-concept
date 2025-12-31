@@ -1,8 +1,14 @@
-use uuid::Uuid;
 use crate::item::aggregate::ItemId;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OrderId(Uuid);
+
+impl Default for OrderId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl OrderId {
     pub fn new() -> Self {
@@ -15,10 +21,6 @@ impl OrderId {
 
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
-    }
-
-    pub fn to_string(&self) -> String {
-        self.0.to_string()
     }
 }
 
@@ -94,7 +96,7 @@ impl std::fmt::Display for OrderError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             OrderError::InvalidQuantity(quantity) => {
-                write!(f, "Quantity must be positive: {}", quantity)
+                write!(f, "Quantity must be positive: {quantity}")
             }
         }
     }
@@ -111,7 +113,7 @@ mod tests {
         let order_id = OrderId::new();
         let item_id = ItemId::new();
         let order = Order::new(order_id.clone(), item_id.clone(), 5).unwrap();
-        
+
         assert_eq!(order.id(), &order_id);
         assert_eq!(order.item_id(), &item_id);
         assert_eq!(order.quantity(), 5);
@@ -122,9 +124,12 @@ mod tests {
         let order_id = OrderId::new();
         let item_id = ItemId::new();
         let result = Order::new(order_id, item_id, 0);
-        
+
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), OrderError::InvalidQuantity(0)));
+        assert!(matches!(
+            result.unwrap_err(),
+            OrderError::InvalidQuantity(0)
+        ));
     }
 
     #[test]
@@ -132,9 +137,12 @@ mod tests {
         let order_id = OrderId::new();
         let item_id = ItemId::new();
         let result = Order::new(order_id, item_id, -1);
-        
+
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), OrderError::InvalidQuantity(-1)));
+        assert!(matches!(
+            result.unwrap_err(),
+            OrderError::InvalidQuantity(-1)
+        ));
     }
 
     #[test]
@@ -144,7 +152,7 @@ mod tests {
             item_id: item_id.clone(),
             quantity: 3,
         };
-        
+
         let order = Order::from(command).unwrap();
         assert_eq!(order.item_id(), &item_id);
         assert_eq!(order.quantity(), 3);
@@ -157,17 +165,20 @@ mod tests {
             item_id,
             quantity: -1,
         };
-        
+
         let result = Order::from(command);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), OrderError::InvalidQuantity(-1)));
+        assert!(matches!(
+            result.unwrap_err(),
+            OrderError::InvalidQuantity(-1)
+        ));
     }
 
     #[test]
     fn test_order_id_conversion() {
         let uuid = Uuid::new_v4();
         let order_id = OrderId::from_uuid(uuid);
-        
+
         assert_eq!(order_id.as_uuid(), &uuid);
         assert_eq!(Uuid::from(order_id.clone()), uuid);
     }

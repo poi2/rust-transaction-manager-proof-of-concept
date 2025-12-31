@@ -1,10 +1,9 @@
 [workspace]
 members = [
     "crates/domain",
-    "crates/sqlx_repository",
-    "crates/sea_orm_repository",
-    "crates/sqlx_app",
-    "crates/sea_orm_app",
+    "crates/use_case", 
+    "crates/infrastructure",
+    "crates/application"
 ]
 resolver = "2"
 

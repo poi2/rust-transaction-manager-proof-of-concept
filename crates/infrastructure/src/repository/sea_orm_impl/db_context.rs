@@ -1,5 +1,5 @@
-use sea_orm::DatabaseTransaction;
 use domain::db_context::DbContext;
+use sea_orm::DatabaseTransaction;
 
 /// SeaORM DatabaseTransaction wrapper
 pub struct SeaOrmDbContext {
