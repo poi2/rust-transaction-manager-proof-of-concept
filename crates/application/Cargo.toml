@@ -14,17 +14,9 @@ path = "src/bin/sqlx_app.rs"
 [dependencies]
 anyhow = { workspace = true }
 domain = { path = "../domain" }
-infrastructure = { path = "../infrastructure", features = ["sea-orm-impl", "sqlx-impl"] }
-use_case = { path = "../use_case" }
-sea-orm = { version = "1.1.1", features = [
-  "sqlx-postgres",
-  "runtime-tokio-rustls",
-  "macros",
-] }
-sqlx = { version = "0.8", features = [
-  "postgres",
-  "uuid",
-  "runtime-tokio-rustls",
-] }
+sea_orm_impl = { path = "../infrastructure/repository/sea_orm_impl" }
+sqlx = { workspace = true }
+sqlx_impl = { path = "../infrastructure/repository/sqlx_impl" }
 tokio = { workspace = true }
+use_case = { path = "../use_case" }
 uuid = { workspace = true }

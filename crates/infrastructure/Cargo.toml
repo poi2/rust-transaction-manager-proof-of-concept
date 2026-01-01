@@ -3,28 +3,19 @@ name = "infrastructure"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["sea-orm-impl", "sqlx-impl"]
+sea-orm-impl = ["sea_orm_impl"]
+sqlx-impl = ["sqlx_impl"]
+
 [dependencies]
 anyhow = { workspace = true }
 domain = { path = "../domain" }
-sea-orm = { version = "1.1.1", features = [
-  "sqlx-postgres",
-  "runtime-tokio-rustls",
-  "macros",
-], optional = true }
-sqlx = { version = "0.8", features = [
-  "postgres",
-  "uuid",
-  "runtime-tokio-rustls",
-], optional = true }
+sea_orm_impl = { path = "repository/sea_orm_impl", optional = true }
+sqlx_impl = { path = "repository/sqlx_impl", optional = true }
 tokio = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-testcontainers = "0.15"
-testcontainers-modules = { version = "0.3", features = ["postgres"] }
-tokio-test = "0.4"
-
-[features]
-default = ["sea-orm-impl", "sqlx-impl"]
-sea-orm-impl = ["sea-orm"]
-sqlx-impl = ["sqlx"]
+sea-orm = { version = "1.1.1", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+sqlx = { workspace = true }

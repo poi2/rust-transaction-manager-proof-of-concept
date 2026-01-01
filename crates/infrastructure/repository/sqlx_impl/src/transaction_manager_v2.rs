@@ -3,7 +3,7 @@ use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::repository::sqlx_impl::db_context::SqlxDbContext;
+use crate::db_context::SqlxDbContext;
 use domain::{db_context::DbContext, transaction_manager::TransactionManager};
 
 /// Safe sqlx TransactionManager implementation (V2) with improved safety

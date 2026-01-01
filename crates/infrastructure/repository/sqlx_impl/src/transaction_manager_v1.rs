@@ -2,7 +2,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::repository::sqlx_impl::db_context::SqlxDbContext;
+use crate::db_context::SqlxDbContext;
 use domain::{db_context::DbContext, transaction_manager::TransactionManager};
 
 /// Original sqlx TransactionManager implementation (V1) - Has unsafe code issues

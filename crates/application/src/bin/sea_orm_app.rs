@@ -1,6 +1,6 @@
 use std::env;
 
-use application::dependency_injection::sea_orm_repository::SeaOrmDependencyInjection;
+use application::ApplicationContainer;
 use domain::{item::aggregate::ItemId, order::aggregate::CreateOrderCommand};
 
 #[tokio::main]
@@ -12,7 +12,7 @@ async fn main() -> Result<(), anyhow::Error> {
     println!("Starting SeaORM application...");
     println!("Database URL: {database_url}");
 
-    let di = SeaOrmDependencyInjection::new(&database_url).await?;
+    let app = ApplicationContainer::new_with_sea_orm(&database_url).await?;
 
     // デモ用の注文作成
     let item_id = ItemId::new();
@@ -26,7 +26,7 @@ async fn main() -> Result<(), anyhow::Error> {
         item_id, command.quantity
     );
 
-    match di.order_management_use_case.create_order(command).await {
+    match app.order_management_use_case.create_order(command).await {
         Ok(order) => {
             println!("Order created successfully: {order:?}");
         }

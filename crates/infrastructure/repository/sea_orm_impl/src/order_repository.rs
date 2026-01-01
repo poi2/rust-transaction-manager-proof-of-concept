@@ -2,7 +2,7 @@ use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::repository::sea_orm_impl::db_context::SeaOrmDbContext;
+use crate::db_context::SeaOrmDbContext;
 use domain::{
     db_context::DbContext,
     item::aggregate::ItemId,

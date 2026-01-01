@@ -1,9 +1,11 @@
 [package]
-name = "use_case"
+name = "sqlx_impl"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 anyhow = { workspace = true }
-domain = { path = "../domain" }
+domain = { path = "../../../domain" }
+sqlx = { workspace = true }
 tokio = { workspace = true }
+uuid = { workspace = true }

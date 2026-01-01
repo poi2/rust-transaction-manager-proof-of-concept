@@ -2,7 +2,7 @@ use sea_orm::{Database, DatabaseConnection, TransactionTrait};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::repository::sea_orm_impl::db_context::SeaOrmDbContext;
+use crate::db_context::SeaOrmDbContext;
 use domain::{db_context::DbContext, transaction_manager::TransactionManager};
 
 /// SeaORM TransactionManager implementation

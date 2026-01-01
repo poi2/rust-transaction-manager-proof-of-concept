@@ -1,3 +1,3 @@
-pub mod dependency_injection;
+pub mod application_container;
 
-pub use dependency_injection::*;
+pub use application_container::ApplicationContainer;

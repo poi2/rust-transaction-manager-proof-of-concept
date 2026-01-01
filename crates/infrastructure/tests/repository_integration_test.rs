@@ -15,8 +15,8 @@ mod repository_integration_tests {
     #[cfg(feature = "sea-orm-impl")]
     mod sea_orm_tests {
         use super::*;
-        use infrastructure::repository::sea_orm_impl::*;
         use sea_orm::{Database, DatabaseConnection};
+        use sea_orm_impl::*;
 
         async fn setup_sea_orm_db() -> DatabaseConnection {
             let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
@@ -110,10 +110,8 @@ mod repository_integration_tests {
     #[cfg(feature = "sqlx-impl")]
     mod sqlx_tests {
         use super::*;
-        use infrastructure::repository::sqlx_impl::{
-            transaction_manager_v1::SqlxTransactionManagerV1, *,
-        };
         use sqlx::PgPool;
+        use sqlx_impl::*;
 
         async fn setup_sqlx_db() -> PgPool {
             let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
@@ -129,7 +127,7 @@ mod repository_integration_tests {
         #[ignore] // Requires running database
         async fn test_sqlx_inventory_crud() {
             let pool = setup_sqlx_db().await;
-            let transaction_manager = SqlxTransactionManagerV1::new(pool);
+            let transaction_manager = SqlxTransactionManager::new(pool);
 
             let repo = Arc::new(SqlxInventoryRepository);
             let item_id = ItemId::new();
@@ -160,7 +158,7 @@ mod repository_integration_tests {
         #[ignore]
         async fn test_sqlx_order_crud() {
             let pool = setup_sqlx_db().await;
-            let transaction_manager = SqlxTransactionManagerV1::new(pool);
+            let transaction_manager = SqlxTransactionManager::new(pool);
 
             let repo = Arc::new(SqlxOrderRepository);
             let order_id = OrderId::new();

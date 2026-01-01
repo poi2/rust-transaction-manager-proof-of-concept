@@ -2,7 +2,7 @@ use sqlx::Row;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::repository::sqlx_impl::db_context::SqlxDbContext;
+use crate::transaction_manager::OwnedSqlxDbContext;
 use domain::{
     db_context::DbContext,
     inventory::{aggregate::Inventory, repository::InventoryRepository},
@@ -13,7 +13,7 @@ use domain::{
 pub struct SqlxInventoryRepository;
 
 impl InventoryRepository for SqlxInventoryRepository {
-    type DbContext = SqlxDbContext<'static>;
+    type DbContext = OwnedSqlxDbContext;
     type Error = anyhow::Error;
 
     async fn find_by_item_id_for_update(
