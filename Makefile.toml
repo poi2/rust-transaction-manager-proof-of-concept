@@ -33,18 +33,18 @@ script = [
         item_id UUID PRIMARY KEY,
         quantity INTEGER NOT NULL
     );
-    
+
     CREATE TABLE IF NOT EXISTS poc_for_sqlx.orders (
         id UUID PRIMARY KEY,
         item_id UUID NOT NULL,
         quantity INTEGER NOT NULL
     );
-    
+
     CREATE TABLE IF NOT EXISTS poc_for_sea_orm.inventory (
         item_id UUID PRIMARY KEY,
         quantity INTEGER NOT NULL
     );
-    
+
     CREATE TABLE IF NOT EXISTS poc_for_sea_orm.orders (
         id UUID PRIMARY KEY,
         item_id UUID NOT NULL,
@@ -76,10 +76,16 @@ dependencies = ["db-reset", "migrate-all"]
 
 # テスト管理
 [tasks.test]
-description = "Run tests with nextest"
+description = "Run tests with nextest (exclude ignored DB tests)"
 command = "cargo"
 args = ["nextest", "run"]
+
+[tasks.test-all]
+description = "Run all tests including ignored DB tests"
 dependencies = ["db-setup"]
+env = { DATABASE_URL = "postgres://postgres:password@localhost:5432/poc_transaction_manager" }
+command = "cargo"
+args = ["nextest", "run", "--run-ignored", "all"]
 
 [tasks.test-unit]
 description = "Run unit tests only"
@@ -87,11 +93,8 @@ command = "cargo"
 args = ["nextest", "run", "--lib"]
 
 [tasks.test-db]
-description = "Run database integration tests"
-dependencies = ["db-setup"]
-env = { DATABASE_URL = "postgres://postgres:password@localhost:5432/poc_transaction_manager" }
-command = "cargo"
-args = ["nextest", "run", "--run-ignored", "all"]
+description = "Run database integration tests (alias for test-all)"
+dependencies = ["test-all"]
 
 [tasks.test-watch]
 description = "Watch and run tests on file changes"
@@ -141,7 +144,40 @@ args = ["check", "--all"]
 [tasks.audit]
 description = "Audit dependencies for security vulnerabilities"
 command = "cargo"
-args = ["audit"]
+args = ["audit", "--ignore", "RUSTSEC-2025-0138"]
+
+[tasks.sort]
+description = "Sort Cargo.toml dependencies"
+command = "cargo"
+args = ["sort", "--workspace", "--grouped"]
+
+[tasks.udeps]
+description = "Check for unused dependencies"
+command = "bash"
+args = ["-c", "cargo +nightly udeps --all-targets"]
+
+[tasks.install-tarpaulin]
+description = "Install cargo-tarpaulin"
+command = "cargo"
+args = ["install", "cargo-tarpaulin"]
+
+[tasks.tarpaulin]
+description = "Generate code coverage report"
+command = "cargo"
+args = ["tarpaulin", "--out", "Html", "--output-dir", "target/tarpaulin"]
+dependencies = ["install-tarpaulin"]
+
+[tasks.check-all]
+description = "Run all quality checks (fmt, clippy, check, sort, udeps) - no tests"
+dependencies = ["fmt", "clippy", "check", "sort", "udeps"]
+
+[tasks.check-all-with-audit]
+description = "Run all quality checks including audit (might fail on advisory DB issues)"
+dependencies = ["fmt", "clippy", "check", "sort", "udeps", "audit"]
+
+[tasks.coverage]
+description = "Run tests and generate coverage report"
+dependencies = ["db-setup", "tarpaulin"]
 
 # 開発環境セットアップ
 [tasks.dev-setup]

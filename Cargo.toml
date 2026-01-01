@@ -1,9 +1,11 @@
 [workspace]
 members = [
+    "crates/application",
     "crates/domain",
-    "crates/use_case", 
     "crates/infrastructure",
-    "crates/application"
+    "crates/infrastructure/repository/sea_orm_impl",
+    "crates/infrastructure/repository/sqlx_impl",
+    "crates/use_case",
 ]
 resolver = "2"
 
@@ -12,5 +14,5 @@ anyhow = { version = "1.0.100", features = ["std"] }
 async-trait = "0.1"
 futures = "0.3"
 sqlx = { version = "0.8.6", features = [ "postgres", "runtime-tokio", "tls-native-tls", "uuid" ] }
-tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros"]}
+tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros"] }
 uuid = { version = "1.18.1", features = ["v4"] }
