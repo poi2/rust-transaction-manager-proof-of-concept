@@ -172,10 +172,12 @@ pub trait DbContext: Send + Sync {
     fn get_transaction(&mut self) -> &mut Self::Tx;
 
     /// Commit transaction (usually called by TransactionManager)
-    async fn commit(&mut self) -> Result<(), Self::Error>;
+    /// Consumes self to prevent reuse after commit
+    async fn commit(self) -> Result<(), Self::Error>;
 
     /// Rollback transaction (usually called by TransactionManager)
-    async fn rollback(&mut self) -> Result<(), Self::Error>;
+    /// Consumes self to prevent reuse after rollback
+    async fn rollback(self) -> Result<(), Self::Error>;
 }
 ```
 
@@ -346,20 +348,31 @@ impl TransactionManager for SeaOrmTransactionManager {
         // `Arc<Mutex<T>>` を使うことでトランザクションの排他的共有を実現。
         let db_context = Arc::new(Mutex::new(db_context));
 
-        // closure `f` にはトランザクションの内部で実行する関数であり、具体的にはクエリーやドメインロジックが定義されている。
-        // `f` の第一引数に `Arc<Mutex<SeaOMRDbContext>>` を渡し、`f` はそれから Repository で使うトランザクションを取得する。
-        // `Arc<Mutex<SeaOMRDbContext>>` になっていることで Clone できるようになっている。
         match f(db_context.clone()).await {
-            // closure `f` が成功の場合は commit を試みる。
             Ok(result) => {
-                let mut guard = db_context.lock().await;
-                guard.commit().await?;
-                Ok(result)
+                // 所有権ベース設計：Arc::try_unwrapで安全に抽出
+                match Arc::try_unwrap(db_context) {
+                    Ok(mutex) => {
+                        let context = mutex.into_inner();
+                        context.commit().await?;
+                        Ok(result)
+                    }
+                    Err(_) => {
+                        Err(anyhow::anyhow!("Failed to extract context for commit"))
+                    }
+                }
             }
-            // closure `f` が成功の場合は rollback を試みる。
+            // closure `f` が失敗の場合は rollback を試みる。
             Err(e) => {
-                let mut guard = db_context.lock().await;
-                let _ = guard.rollback().await;
+                match Arc::try_unwrap(db_context) {
+                    Ok(mutex) => {
+                        let context = mutex.into_inner();
+                        let _ = context.rollback().await;
+                    }
+                    Err(_) => {
+                        // Ignore rollback failure in error case
+                    }
+                }
                 Err(e)
             }
         }
@@ -463,18 +476,11 @@ impl TransactionManager for SqlxTransactionManager {
             };
 
             let db_context = SqlxDbContext::new(tx_static);
-            // `Arc<Mutex<T>>` を使うことでトランザクションの排他的共有を実現。
-            // unsafe を使い sqlx のトランザクション型を静的ライフタイムへと変換したことでコンパイルエラーを回避している。
             let db_context = Arc::new(Mutex::new(db_context));
 
-            // closure `f` にはトランザクションの内部で実行する関数であり、具体的にはクエリーやドメインロジックが定義されている。
-            // `f` の第一引数に `Arc<Mutex<SqlxDbContext>>` を渡し、`f` はそれから Repository で使うトランザクションを取得する。
-            // `Arc<Mutex<SqlxDbContext>>` になっていることで Clone できるようになっている。
             match f(db_context.clone()).await {
-                // closure `f` が成功の場合は commit を試みる。
                 Ok(result) => {
-                    // Arc::try_unwrap を使って安全に所有権を回収する。
-                    // このタイミングで `Arc` によるメモリーの排他的共有は終了する。
+                    // 所有権ベース設計：Arc::try_unwrapで安全に抽出
                     match Arc::try_unwrap(db_context) {
                         Ok(mutex) => {
                             let mut context = mutex.into_inner();
@@ -482,14 +488,11 @@ impl TransactionManager for SqlxTransactionManager {
                             Ok(result)
                         }
                         Err(_) => {
-                            Err(anyhow::anyhow!("Failed to extract context"))
+                            Err(anyhow::anyhow!("Failed to extract context for commit"))
                         }
                     }
                 }
-                // closure `f` が成功の場合は rollback を試みる。
                 Err(e) => {
-                    // Arc::try_unwrap を使って安全に所有権を回収する。
-                    // このタイミングで `Arc` によるメモリーの排他的共有は終了する。
                     match Arc::try_unwrap(db_context) {
                         Ok(mutex) => {
                             let mut context = mutex.into_inner();
@@ -580,11 +583,21 @@ sqlx の設計および現在の Rust の言語機能においては、完全な
 
 ## まとめ
 
+## 学習者向けの段階的実装アプローチ
+
+Rust初中級者の方は、以下の順序で実装を進めることを推奨します：
+
+1. **基本のRepository実装**: 単一Repository、単一トランザクション
+2. **Arc<Mutex>導入**: 複数Repository間でのトランザクション共有
+3. **Clean Architecture適用**: 抽象化による実装交換可能性
+4. **ORM比較検証**: SeaORMとsqlxの特性理解
+5. **本格運用準備**: エラーハンドリング、ロギング、監視の追加
+
 Rust x DDD x Clean Architecture のアプリケーションで利用できる Repository の設計と実装について提案を行いました。
-今回の実装によりトランザクション内で複数の Repository のクエリーを実行が実現され、現実的で拡張性の高い安全な設計と実装を手に入れることができました。
-この実装に苦労していたので、私が求める実装が手に入りとても満足です。
-本記事の読者の方々も実装をコピーすることで、簡単に production ready な実装を手に入れる事ができます。
-ぜひご活用ください。
+今回の実装によりトランザクション内で複数の Repository のクエリー実行が実現され、現実的で拡張性の高い安全な設計と実装パターンを提示できました。
+
+本記事のコードは実証コード（proof-of-concept）として動作しますが、本格的な運用には追加の考慮事項（エラーハンドリング、パフォーマンス最適化、監視など）が必要になります。
+ぜひ学習の出発点としてご活用ください。
 
 # reference
 
