@@ -1,11 +1,4 @@
-Rust の DB トランザクション管理方法の整理
------
-
-https://docs.google.com/document/d/19DicvLvGAvO8GM9Z0i-aVPz6qey8D4P-cPadOXyN3Yw/edit?tab=t.0
-https://threedots.tech/post/database-transactions-in-go/
-https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/infrastructure-persistence-layer-design
-https://martinfowler.com/eaaCatalog/unitOfWork.html
-
+Rust における Repository を跨いだトランザクション管理の実装
 -----
 
 # はじめに
@@ -48,7 +41,7 @@ https://martinfowler.com/eaaCatalog/unitOfWork.html
 # 要件の整理
 
 ではトランザクションの実装に求められる要件はどのようなものでしょうか？
-この記事は Rust の実装に持っていきたいので Rust は当然入りますが、汎用的なアプリケーションで利用可能を目指したいので、Rust x DDD x Clean Architecture x エンタープライズアプリケーションという条件下で考えましょう。
+この記事は Rust の実装に持っていきたいので Rust は当然入りますが、汎用的なアプリケーションで利用可能を目指したいので、Rust x DDD x Clean Architecture のアプリケーションという条件下で考えましょう。
 以下のような要件を置きます。
 
 ## 機能要件（トランザクションの保存パターン）
@@ -76,14 +69,18 @@ trait の抽象化されたトランザクションを複数の Repository で�
 
 トランザクションを借用で渡せればよいですが、可変借用のため複数の Repository で共有することができません。
 では所有権を渡すことで解決したいですが、SeaORM のトランザクションは Clone ができないため、所有権を渡すこともできません。
-そのため `Arc<Mutex<T>>` パターンを使った排他的共有を行う必要があります。
+
+そして当たり前ではありますが、トランザクションのセッション内においてはクエリーはシーケンシャル（直列）にしか実行できません。
+
+それらの制約を満たすために `Arc<Mutex<T>>` パターンを使った排他的共有を行う必要があります。
+（`Arc` を使うことでマルチスレッド間でデータを安全に共有を実現し、`Mutex` を使うことで排他的にデータにアクセスできるようになります）
 
 ## sqlx 固有の制約
 
 sqlx でも SeaORM と同じ抽象化を行う必要があります。
 さらに SeaORM のトランザクションと同じく Clone ができないため、sqlx においても `Arc<Mutex<T>>` パターンを使った排他的共有を行う必要があります。
 
-SeaORM はそれでよいのですが、sqlx のトランザクション `Transaction<'c, DB>` は借用ライフタイムを持つため、またもう一歩複雑になります。
+SeaORM はそれでよいのですが、sqlx のトランザクション `Transaction<'c, DB>` は借用ライフタイムを持つため、さらに複雑になります。
 
 まず `Arc<Mutex<T>>` の型制約と sqlx の `Transaction<'c, DB>` の型制約が根本的に矛盾しています。
 整理すると以下です。
@@ -97,53 +94,6 @@ SeaORM はそれでよいのですが、sqlx のトランザクション `Transa
 
 sqlx の実装においてはこれらの複数な要件と型パズルを解くことになります。
 具体的なコードは後述の sqlx の実装で解説します。
-
-TODO: sqlx の実装で以下を解説する。
-
-ではなぜ `Arc` で `'static` が必要なのでしょうか？
-
-```rust
-// これがコンパイルエラーになる理由
-async fn broken_example() {
-    let pool = /* コネクションプール */;
-    let tx = pool.begin().await?;  // tx: Transaction<'pool, Postgres>
-
-    // エラー: 'pool は 'static より短いライフタイム
-    let shared_tx: Arc<Mutex<Transaction<'static, Postgres>>> =
-        Arc::new(Mutex::new(tx)); // ← ここでコンパイルエラー
-}
-```
-
-`Arc` は複数のスレッド間で共有可能であり、非同期ランタイムではタスクが異なるスレッドで実行される可能性があるため、内部のデータが参照する元のリソースよりも長生きすることを防ぐ必要があります。
-そのため、`Arc` に格納するデータは `'static` ライフタイム（静的ライフタイム）を持つ必要があります。
-（今回のユースケースでいうと、非同期ランタイムで安全にトランザクションを共有するために静的ライフタイムが必要になっています）
-
-そこでその矛盾を解消するために有限ライフタイムから静的ライフタイムへの変換が必要です。
-それを行っているのが `unsafe` と `std::mem::transmute` を使っている部分です。
-
-```rust
-let tx_static = unsafe {
-    std::mem::transmute::<
-        Transaction<'_, Postgres>,
-        Transaction<'static, Postgres>
-    >(tx)
-};
-```
-
-これによって以下の問題を解決します。
-
-- トランザクションの所有権を明確に管理
-- トランザクションの仕様を関数のスコープ内に限定
-
-ただし、新たな問題として unsafe によってメモリー管理を手動で行うため、メモリー管理の安全性も手動で保証する必要があります。
-今回の実装では unsafe は TransactionManager の `fn transaction()` の関数スコープ内に完結していてるため、関数を抜けるタイミングで unsafe のメモリー管理が終了することが保証されています。
-そのため、この関数の内側では unsafe ですが、関数の外側では Rust のコンパイラーによる safe なコードが保証されます。
-
-TODO: sqlx の実装で具体的に ①、②、③ のように番号を振って解説する
-
-- `Arc::try_unwrap` により closure に共有したトランザクションの所有権を安全に回収している
-    - このタイミングで `Arc` によるメモリーの排他的共有は終了する
-    - その後、トランザクションの commit/rollback を実行して、トランザクションのセッションを終了する
 
 # 実装
 
@@ -291,8 +241,9 @@ pub trait InventoryRepository: Send + Sync {
 ### TransactionManager trait: トランザクション管理の中核
 
 TransactionManager trait は、Application layer で使用したトランザクション管理の抽象 I/F です。
-
-**Rustでトランザクション管理を実現する上での最重要ポイント**: `Arc<Mutex<Self::DbContext>>` によって、型安全性を保ちながらトランザクションを複数の Repository で共有できます。
+`fn transaction()` は closure を受け取ります。
+closure の中身はトランザクションのブロックの中で実行する関数になっており、closure は TransactionManager が管理しているトランザクションを `Arc<Mutex<Self::DbContext>>` という型で受け取ります。
+`Arc<Mutex<Self::DbContext>>` によって、型安全性を保ちながらトランザクションを複数の Repository で共有できるようになっています。
 
 ```rust
 // domain/src/transaction_manager.rs
@@ -367,100 +318,15 @@ pub async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, T
 }
 ```
 
-## Infrastructure layer: sqlx の Owned 実装
+## Infrastructure layer
 
-### sqlx の課題と解決策
+Infrastructure layer では SeaORM と sqlx を使った２つの実装を紹介します。
 
-sqlx では `Transaction<'c, DB>` が借用ライフタイムを持つため、`Arc<Mutex<T>>` パターンとの組み合わせで unsafe コードが必要になります。この問題を**所有権ベース設計**で解決します。
+### SeaORM の実装
 
-所有権ベースの設計により、構造的にunsafeコードの問題を解決した実装です：
+SeaORM 実装はとてもシンプルです。
 
-```rust
-// infrastructure/src/repository/sqlx_impl/transaction_manager.rs
-
-/// Owned DbContext that owns its transaction
-/// This eliminates most lifetime issues by taking ownership
-pub struct OwnedSqlxDbContext {
-    tx: sqlx::Transaction<'static, sqlx::Postgres>,
-}
-
-impl OwnedSqlxDbContext {
-    /// Consume self and commit the transaction
-    pub async fn into_commit(self) -> Result<(), sqlx::Error> {
-        self.tx.commit().await
-    }
-
-    /// Consume self and rollback the transaction
-    pub async fn into_rollback(self) -> Result<(), sqlx::Error> {
-        self.tx.rollback().await
-    }
-}
-
-impl TransactionManager for SqlxTransactionManager {
-    type DbContext = OwnedSqlxDbContext;
-    type Error = anyhow::Error;
-
-    fn transaction<T, F, Fut>(&self, f: F) -> impl Future<Output = Result<T, Self::Error>> + Send
-    where
-        F: FnOnce(Arc<Mutex<Self::DbContext>>) -> Fut + Send,
-        Fut: Future<Output = Result<T, Self::Error>> + Send,
-        T: Send,
-    {
-        let pool = self.pool.clone();
-
-        async move {
-            let tx = pool.begin().await?;
-
-            // ✅ 最小限のunsafe: 初期化時のみ
-            let tx_static = unsafe {
-                std::mem::transmute::<
-                    sqlx::Transaction<'_, sqlx::Postgres>,
-                    sqlx::Transaction<'static, sqlx::Postgres>
-                >(tx)
-            };
-
-            let db_context = OwnedSqlxDbContext::new(tx_static);
-            let db_context = Arc::new(Mutex::new(db_context));
-
-            match f(db_context.clone()).await {
-                Ok(result) => {
-                    // ✅ 所有権取り戻し: Arc::try_unwrapで安全に抽出
-                    match Arc::try_unwrap(db_context) {
-                        Ok(mutex) => {
-                            let owned_context = mutex.into_inner();
-                            owned_context.into_commit().await?;
-                            Ok(result)
-                        }
-                        Err(_) => {
-                            Err(anyhow::anyhow!("Failed to extract owned context"))
-                        }
-                    }
-                }
-                Err(e) => {
-                    match Arc::try_unwrap(db_context) {
-                        Ok(mutex) => {
-                            let owned_context = mutex.into_inner();
-                            let _ = owned_context.into_rollback().await;
-                        }
-                        Err(_) => {
-                            // エラーケースではロールバック失敗を無視
-                        }
-                    }
-                    Err(e)
-                }
-            }
-        }
-    }
-}
-```
-
-**改善点**:
-- 🛡️ **構造的安全性**: 所有権ベース設計でunsafe範囲を最小化
-- 🔄 **消費型操作**: `into_commit()` / `into_rollback()`でコンパイル時安全性
-- 🎯 **明確な境界**: unsafeコードが初期化時のみに限定
-- 🚀 **将来拡張性**: 完全なunsafe排除への道筋## SeaORM 実装: 参考実装
-
-SeaORM実装は比較的シンプルで、unsafeコードは不要です：
+#### SeaORMTransactionManager の実装
 
 ```rust
 // infrastructure/src/repository/sea_orm_impl/transaction_manager.rs
@@ -477,14 +343,20 @@ impl TransactionManager for SeaOrmTransactionManager {
     {
         let txn = self.db.begin().await?;
         let db_context = SeaOrmDbContext::new(txn);
+        // `Arc<Mutex<T>>` を使うことでトランザクションの排他的共有を実現。
         let db_context = Arc::new(Mutex::new(db_context));
 
+        // closure `f` にはトランザクションの内部で実行する関数であり、具体的にはクエリーやドメインロジックが定義されている。
+        // `f` の第一引数に `Arc<Mutex<SeaOMRDbContext>>` を渡し、`f` はそれから Repository で使うトランザクションを取得する。
+        // `Arc<Mutex<SeaOMRDbContext>>` になっていることで Clone できるようになっている。
         match f(db_context.clone()).await {
+            // closure `f` が成功の場合は commit を試みる。
             Ok(result) => {
                 let mut guard = db_context.lock().await;
                 guard.commit().await?;
                 Ok(result)
             }
+            // closure `f` が成功の場合は rollback を試みる。
             Err(e) => {
                 let mut guard = db_context.lock().await;
                 let _ = guard.rollback().await;
@@ -495,70 +367,230 @@ impl TransactionManager for SeaOrmTransactionManager {
 }
 ```
 
-## 実装のポイントと学び
+#### SeaORM Repository Impl の実装
 
-### 1. Arc<Mutex<T>>パターンの威力
+Repository Impl もとても素直なコードになっています。
 
-Rustでは、トランザクションのような共有リソースを複数箇所で同時に使用すると、コンパイル時に所有権エラーが発生します。
-Arc（参照カウンタ）と Mutex（排他制御）を組み合わせることで、**型安全性を保ちながらトランザクションを複数の Repository で共有**できます。
+各関数の第一引数の `db_context: &Arc<Mutex<Self::DbContext>>` にはトランザクションが入っているので、そこからトランザクションを取得します。
+安全に排他的にアクセスするため `lock()` を使って MutexGuard を取得し、トランザクションを取得している。
 
-### 2. unsafeコードとの向き合い方
+その後 SeaORM が提供する ORM を使ってクエリーを組み立て、トランザクション内でクエリーを実行します。
 
-sqlxの設計上、完全なunsafe排除は困難ですが、**所有権ベース設計**により構造的に問題を最小化できます：
+説明のために InventoryRepository の一部コードを抜粋し説明します。
+OrderRepository のコードも要領は同じです。
 
-- **最小限のunsafe**: 初期化時のライフタイム変換のみ
-- **構造的安全性**: Arc::try_unwrapによる所有権取り戻し
-- **将来への道筋**: 完全なunsafe排除の可能性を残す設計
+```rust
+#[derive(Clone)]
+pub struct SeaOrmInventoryRepository;
 
-### 3. Clean Architectureとの相性
+impl InventoryRepository for SeaOrmInventoryRepository {
+    type DbContext = SeaOrmDbContext;
+    type Error = anyhow::Error;
 
-この実装パターンは、ORM によらず汎用的に適用でき、Clean Architectureの依存性逆転の原則を満たします。
+    async fn find_by_item_id_for_update(
+        &self,
+        db_context: &Arc<Mutex<Self::DbContext>>,
+        item_id: &ItemId,
+    ) -> Result<Option<Inventory>, Self::Error> {
+        // db_context にトランザクションが入っている。
+        // `Arc<Mutex<T>>` の T に排他的にアクセスするために `lock()` を使って MutexGuard を取得する。
+        let mut guard = db_context.lock().await;
+        // 実際のトランザクションを取得する。
+        let txn = guard.get_transaction();
+
+        // SeaORM の ORM 経由でデータを取得する。
+        let result = Entity::find()
+            .filter(Column::ItemId.eq(*item_id.as_uuid()))
+            .lock_exclusive() // SELECT FOR UPDATE
+            .one(txn)
+            .await?;
+
+        match result {
+            // クエリーが成功しデータが取得できた場合は、Inventory を生成して返す。
+            Some(model) => {
+                let inventory = Inventory::new(ItemId::from_uuid(model.item_id), model.quantity)?;
+                Ok(Some(inventory))
+            }
+            // クエリーは成功したがデータがなかった場合は None を返す。
+            None => Ok(None),
+        }
+    }
+}
+```
+
+### sqlx の実装
+
+sqlx の実装は SeaORM と比較すると複雑で実装難易度が高いです。
+
+#### SqlxTransactionManager の実装
+
+`sqlx 固有の要件` で説明した通り、トランザクションの排他的共有のために `Arc<Mutex<T>>` を使い、sqlx のトランザクション型 `Transaction<'c, DB>` の有限ライフタイムの型パズルを解く必要があります。
+
+`Arc` は複数のスレッド間で共有可能であり、非同期ランタイムではタスクが異なるスレッドで実行される可能性があるため、内部のデータが参照する元のリソースよりも長生きすることを防ぐ必要があります。
+そのため、`Arc` に格納するデータは `'static` ライフタイム（静的ライフタイム）を持つ必要があり、有限ライフタイムを含めることはできません。
+（今回のユースケースでいうと、非同期ランタイムで安全にトランザクションを共有するために静的ライフタイムが必要になっています）
+
+そこでその矛盾を解消するために有限ライフタイムから静的ライフタイムへの変換が必要です。
+
+それらをすべて解消するのが以下のコードです。
+
+```rust
+// infrastructure/src/repository/sqlx_impl/transaction_manager.rs
+
+impl TransactionManager for SqlxTransactionManager {
+    type DbContext = SqlxDbContext;
+    type Error = anyhow::Error;
+
+    fn transaction<T, F, Fut>(&self, f: F) -> impl Future<Output = Result<T, Self::Error>> + Send
+    where
+        F: FnOnce(Arc<Mutex<Self::DbContext>>) -> Fut + Send,
+        Fut: Future<Output = Result<T, Self::Error>> + Send,
+        T: Send,
+    {
+        let pool = self.pool.clone();
+
+        async move {
+            let tx = pool.begin().await?;
+
+            // 有限ライフタイムから静的ライフタイムへの変換を unsafe を使って実現。
+            // unsafe は `fn transaction()` の関数スコープの中で完結しているため、
+            // 関数を抜けるタイミングで unsafe のメモリー管理を抜けることが保証される。
+            let tx_static = unsafe {
+                std::mem::transmute::<
+                    sqlx::Transaction<'_, sqlx::Postgres>,
+                    sqlx::Transaction<'static, sqlx::Postgres>
+                >(tx)
+            };
+
+            let db_context = SqlxDbContext::new(tx_static);
+            // `Arc<Mutex<T>>` を使うことでトランザクションの排他的共有を実現。
+            // unsafe を使い sqlx のトランザクション型を静的ライフタイムへと変換したことでコンパイルエラーを回避している。
+            let db_context = Arc::new(Mutex::new(db_context));
+
+            // closure `f` にはトランザクションの内部で実行する関数であり、具体的にはクエリーやドメインロジックが定義されている。
+            // `f` の第一引数に `Arc<Mutex<SqlxDbContext>>` を渡し、`f` はそれから Repository で使うトランザクションを取得する。
+            // `Arc<Mutex<SqlxDbContext>>` になっていることで Clone できるようになっている。
+            match f(db_context.clone()).await {
+                // closure `f` が成功の場合は commit を試みる。
+                Ok(result) => {
+                    // Arc::try_unwrap を使って安全に所有権を回収する。
+                    // このタイミングで `Arc` によるメモリーの排他的共有は終了する。
+                    match Arc::try_unwrap(db_context) {
+                        Ok(mutex) => {
+                            let mut context = mutex.into_inner();
+                            context.commit().await?;
+                            Ok(result)
+                        }
+                        Err(_) => {
+                            Err(anyhow::anyhow!("Failed to extract context"))
+                        }
+                    }
+                }
+                // closure `f` が成功の場合は rollback を試みる。
+                Err(e) => {
+                    // Arc::try_unwrap を使って安全に所有権を回収する。
+                    // このタイミングで `Arc` によるメモリーの排他的共有は終了する。
+                    match Arc::try_unwrap(db_context) {
+                        Ok(mutex) => {
+                            let mut context = mutex.into_inner();
+                            let _ = context.rollback().await;
+                        }
+                        Err(_) => {
+                            // エラーケースではロールバック失敗を無視
+                        }
+                    }
+                    Err(e)
+                }
+            }
+        }
+    }
+}
+```
+
+#### SqlxRepository Impl の実装
+
+Repository Impl は SeaORM も sqlx もどちらも素直なコードになっています。
+
+各関数の第一引数の `db_context: &Arc<Mutex<Self::DbContext>>` にはトランザクションが入っているので、そこからトランザクションを取得します。
+安全に排他的にアクセスするため `lock()` を使って MutexGuard を取得し、トランザクションを取得している。
+
+その後 SeaORM が提供する ORM を使ってクエリーを組み立て、トランザクション内でクエリーを実行します。
+
+説明のために InventoryRepository の一部コードを抜粋し説明します。
+OrderRepository のコードも要領は同じです。
+
+```rust
+impl InventoryRepository for SqlxInventoryRepository {
+    type DbContext = SqlxDbContext;
+    type Error = anyhow::Error;
+
+    async fn find_by_item_id_for_update(
+        &self,
+        db_context: &Arc<Mutex<Self::DbContext>>,
+        item_id: &ItemId,
+    ) -> Result<Option<Inventory>, Self::Error> {
+        // db_context にトランザクションが入っている。
+        // `Arc<Mutex<T>>` の T に排他的にアクセスするために `lock()` を使って MutexGuard を取得する。
+        let mut guard = db_context.lock().await;
+        // 実際のトランザクションを取得する。
+        let txn = guard.get_transaction();
+
+        // sqlx のクエリービルダーを使いクエリーを作り、データを取得する。
+        let result = sqlx::query(
+            "SELECT item_id, quantity FROM poc_for_sqlx.inventory WHERE item_id = $1 FOR UPDATE",
+        )
+        .bind(item_id.as_uuid())
+        .fetch_optional(&mut **txn)
+        .await?;
+
+        match result {
+            // クエリーが成功しデータが取得できた場合は、Inventory を生成して返す。
+            Some(row) => {
+                let item_id: uuid::Uuid = row.try_get("item_id")?;
+                let quantity: i32 = row.try_get("quantity")?;
+                let inventory = Inventory::new(ItemId::from_uuid(item_id), quantity)?;
+                Ok(Some(inventory))
+            }
+            // クエリーは成功したがデータがなかった場合は None を返す。
+            None => Ok(None),
+        }
+    }
+}
+```
+# 実装のポイントと学び
+
+## 1. `Arc<Mutex<T>>` パターンの活用
+
+Rust では、トランザクションのような共有リソースを複数箇所で同時に使用すると、コンパイル時に所有権エラーが発生します。
+`Arc` （参照カウンタ）と `Mutex` （排他制御）を組み合わせることで型安全性を保ちながらデータをマルチスレッドから排他的に扱うことができます。
+
+Rust で並列処理を利用する場合はこれらの構造体を付き合っていく必要があります。
+
+## 2. unsafe コードとの向き合い方
+
+sqlx の設計および現在の Rust の言語機能においては、完全な unsafe 排除は困難ですが、不安定なコードを局所化し、それ以外のコードを安全に保つこと重要です。
+今回の実装においては `async move {...}` ブロックや関数のスコープを抜けるタイミングでメモリーが解放されることで、内部では unsafe を使って型パズルを解消しながら、外部では綺麗な I/F を提供することに成功しました。
+
+今後の展望としては、Rust のライフタイムとその変換の機能がより現実的に解釈可能になり、unsafe を必要としないコードを採用できるようになることを期待します。
+
+## 3. Clean Architecture との相性
+
+この実装パターンは、ORM によらず汎用的に適用でき、Clean Architecture の依存性逆転の原則を満たします。
 `domain` → `use_case` → `infrastructure` → `application` の依存関係が適切に保たれています。
-
-### 4. 型システムの活用
-
-Rustの強力な型システムを活用することで、以下を実現：
-
-- コンパイル時のトランザクション安全性チェック
-- ゼロコスト抽象化
-- ORM実装の交換可能性
 
 ## まとめ
 
-### 達成したこと
-
-1. **型安全**: Rustの所有権システムと調和したトランザクション管理
-2. **実装交換性**: SeaORM ↔ sqlx の切り替えが可能
-3. **構造的安全性**: 所有権ベース設計によるunsafe問題の最小化
-4. **包括的テスト**: 35個のテストによる信頼性保証
-5. **Clean Architecture**: 適切な依存関係の維持
-
-### 技術的成果
-
-- **Arc<Mutex<DbContext>>** による安全な共有リソース管理
-- **所有権ベース設計** による構造的安全性向上
-- **消費型操作** による明確なリソース管理
-- **Schema分離** による複数ORM並行テスト
-
-### 今後の展望
-
-- **完全unsafe排除**: 所有権ベース設計のさらなる発展
-- **パフォーマンス最適化**: ベンチマークと最適化
-- **他ORM対応**: diesel、rbatisなどへの拡張
-- **分散トランザクション**: マイクロサービス対応
+Rust x DDD x Clean Architecture のアプリケーションで利用できる Repository の設計と実装について提案を行いました。
+今回の実装によりトランザクション内で複数の Repository のクエリーを実行が実現され、現実的で拡張性の高い安全な設計と実装を手に入れることができました。
+この実装に苦労していたので、私が求める実装が手に入りとても満足です。
+本記事の読者の方々も実装をコピーすることで、簡単に production ready な実装を手に入れる事ができます。
+ぜひご活用ください。
 
 # reference
 
 - [Design the infrastructure persistence layer](https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/infrastructure-persistence-layer-design)
-- [Unit of Work](https://martinfowler.com/eaaCatalog/unitOfWork.html)
-- [【Rust】アプリケーションのDBトランザクション管理の方法を考える](https://zenn.dev/penysho/articles/a48ca73b757656)
-- TODO: 自分の記事
+- [Rust における Unit of Work の実装例](https://zenn.dev/poi2/articles/8162610d20798a)
+- [SeaQL/sea-orm](https://github.com/SeaQL/sea-orm)
+- [launchbadge/sqlx](https://github.com/launchbadge/sqlx)
 - [Arc in std::sync](https://doc.rust-lang.org/std/sync/struct.Arc.html)
 - [Mutex in std::sync](https://doc.rust-lang.org/std/sync/struct.Mutex.html)
-
-
----
-
-Rust でのトランザクション管理は確かに複雑ですが、適切なパターンと所有権ベース設計により、**安全で実用的な**実装が可能です。`Arc<Mutex<DbContext>>`パターンは、トランザクション以外のRustマルチスレッドプログラミングにも応用できる重要な設計パターンです。
-
-**Repository**: [rust-transaction-manager-proof-of-concept](https://github.com/poi2/rust-transaction-manager-proof-of-concept)
