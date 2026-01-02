@@ -14,9 +14,10 @@ mod repository_integration_tests {
 
     #[cfg(feature = "sea-orm-impl")]
     mod sea_orm_tests {
-        use super::*;
         use sea_orm::{Database, DatabaseConnection};
         use sea_orm_impl::*;
+
+        use super::*;
 
         async fn setup_sea_orm_db() -> DatabaseConnection {
             let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {
@@ -109,9 +110,10 @@ mod repository_integration_tests {
 
     #[cfg(feature = "sqlx-impl")]
     mod sqlx_tests {
-        use super::*;
         use sqlx::PgPool;
         use sqlx_impl::*;
+
+        use super::*;
 
         async fn setup_sqlx_db() -> PgPool {
             let database_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| {

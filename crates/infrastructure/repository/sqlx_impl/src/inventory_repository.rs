@@ -1,13 +1,14 @@
-use sqlx::Row;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
-use crate::transaction_manager::OwnedSqlxDbContext;
 use domain::{
     db_context::DbContext,
     inventory::{aggregate::Inventory, repository::InventoryRepository},
     item::aggregate::ItemId,
 };
+use sqlx::Row;
+use tokio::sync::Mutex;
+
+use crate::transaction_manager::OwnedSqlxDbContext;
 
 #[derive(Clone)]
 pub struct SqlxInventoryRepository;

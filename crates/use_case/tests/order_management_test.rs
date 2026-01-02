@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod order_management_integration_tests {
     use std::sync::Arc;
-    use tokio::sync::Mutex;
 
     use domain::{
         db_context::DbContext, inventory::aggregate::Inventory, item::aggregate::ItemId,
         order::aggregate::CreateOrderCommand, transaction_manager::TransactionManager,
     };
+    use tokio::sync::Mutex;
     use use_case::order_management::OrderManagementUseCase;
 
     // Enhanced mock implementations with state tracking

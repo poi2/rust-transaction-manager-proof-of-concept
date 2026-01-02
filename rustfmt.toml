@@ -1,0 +1,11 @@
+# Rustfmt configuration
+edition = "2021"
+
+# Import formatting - merge imports from same crate
+imports_granularity = "Crate"
+
+# Group imports by category
+group_imports = "StdExternalCrate"
+
+# Format imports like use std::{collections::HashMap, sync::Arc}
+imports_layout = "Mixed"

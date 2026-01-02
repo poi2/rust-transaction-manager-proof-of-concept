@@ -75,14 +75,15 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::Arc;
-    use tokio::sync::Mutex;
 
     use domain::{
         db_context::DbContext, inventory::aggregate::Inventory, item::aggregate::ItemId,
         order::aggregate::OrderId,
     };
+    use tokio::sync::Mutex;
+
+    use super::*;
 
     // Mock implementations for testing
     struct MockDbContext {

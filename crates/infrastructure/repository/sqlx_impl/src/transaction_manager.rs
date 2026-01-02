@@ -32,12 +32,11 @@
 //! - Clear ownership boundaries / 明確な所有権境界
 //! - Predictable memory management / 予測可能なメモリ管理
 
-use sqlx::PgPool;
-use std::future::Future;
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::{future::Future, sync::Arc};
 
 use domain::{db_context::DbContext, transaction_manager::TransactionManager};
+use sqlx::PgPool;
+use tokio::sync::Mutex;
 
 /// Owned transaction approach - eliminates unsafe code through architectural redesign
 /// This implementation takes ownership of transactions instead of borrowing

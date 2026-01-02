@@ -1,8 +1,5 @@
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
-use crate::db_context::SeaOrmDbContext;
 use domain::{
     db_context::DbContext,
     item::aggregate::ItemId,
@@ -11,9 +8,12 @@ use domain::{
         repository::OrderRepository,
     },
 };
-
 // SeaORM entity definitions
 use sea_orm::entity::prelude::*;
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use tokio::sync::Mutex;
+
+use crate::db_context::SeaOrmDbContext;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(schema_name = "poc_for_sea_orm", table_name = "orders")]

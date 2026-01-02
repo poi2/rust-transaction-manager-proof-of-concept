@@ -1,5 +1,6 @@
-use crate::item::aggregate::ItemId;
 use uuid::Uuid;
+
+use crate::item::aggregate::ItemId;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OrderId(Uuid);

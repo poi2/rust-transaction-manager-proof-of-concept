@@ -1,8 +1,5 @@
-use sqlx::Row;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
-use crate::transaction_manager::OwnedSqlxDbContext;
 use domain::{
     db_context::DbContext,
     item::aggregate::ItemId,
@@ -11,6 +8,10 @@ use domain::{
         repository::OrderRepository,
     },
 };
+use sqlx::Row;
+use tokio::sync::Mutex;
+
+use crate::transaction_manager::OwnedSqlxDbContext;
 
 #[derive(Clone)]
 pub struct SqlxOrderRepository;

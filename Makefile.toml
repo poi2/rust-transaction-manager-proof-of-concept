@@ -127,9 +127,9 @@ dependencies = ["db-setup"]
 
 # コード品質
 [tasks.fmt]
-description = "Format code"
-command = "cargo"
-args = ["fmt"]
+description = "Format code with nightly rustfmt (for advanced import grouping)"
+command = "bash"
+args = ["-c", "cargo +nightly fmt"]
 
 [tasks.clippy]
 description = "Run clippy linter"

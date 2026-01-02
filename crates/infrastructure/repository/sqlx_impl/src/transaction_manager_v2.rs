@@ -1,10 +1,10 @@
+use std::{future::Future, sync::Arc};
+
+use domain::{db_context::DbContext, transaction_manager::TransactionManager};
 use sqlx::PgPool;
-use std::future::Future;
-use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::db_context::SqlxDbContext;
-use domain::{db_context::DbContext, transaction_manager::TransactionManager};
 
 /// Safe sqlx TransactionManager implementation (V2) with improved safety
 /// Uses `async move` blocks and better scope control to minimize unsafe code risks

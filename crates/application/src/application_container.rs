@@ -1,4 +1,5 @@
 use std::sync::Arc;
+
 use use_case::order_management::OrderManagementUseCase;
 
 pub struct ApplicationContainer<TM, IR, OR> {

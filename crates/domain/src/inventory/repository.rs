@@ -1,10 +1,8 @@
-use std::future::Future;
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
+
 use tokio::sync::Mutex;
 
-use crate::db_context::DbContext;
-use crate::inventory::aggregate::Inventory;
-use crate::item::aggregate::ItemId;
+use crate::{db_context::DbContext, inventory::aggregate::Inventory, item::aggregate::ItemId};
 
 pub trait InventoryRepository: Send + Sync {
     type DbContext: DbContext;
