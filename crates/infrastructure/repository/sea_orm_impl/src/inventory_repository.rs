@@ -7,7 +7,7 @@ use domain::{
 };
 // SeaORM entity definitions (would typically be in a separate entities module)
 use sea_orm::entity::prelude::*;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, Set};
 use tokio::sync::Mutex;
 
 use crate::db_context::SeaOrmDbContext;
@@ -42,6 +42,7 @@ impl InventoryRepository for SeaOrmInventoryRepository {
 
         let result = Entity::find()
             .filter(Column::ItemId.eq(*item_id.as_uuid()))
+            .lock_exclusive()
             .one(txn)
             .await?;
 

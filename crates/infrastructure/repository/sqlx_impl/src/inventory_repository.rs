@@ -8,13 +8,13 @@ use domain::{
 use sqlx::Row;
 use tokio::sync::Mutex;
 
-use crate::transaction_manager::OwnedSqlxDbContext;
+use crate::SqlxDbContext;
 
 #[derive(Clone)]
 pub struct SqlxInventoryRepository;
 
 impl InventoryRepository for SqlxInventoryRepository {
-    type DbContext = OwnedSqlxDbContext;
+    type DbContext = SqlxDbContext;
     type Error = anyhow::Error;
 
     async fn find_by_item_id_for_update(

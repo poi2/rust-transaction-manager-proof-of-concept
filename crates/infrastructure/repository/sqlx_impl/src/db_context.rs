@@ -1,21 +1,20 @@
 use domain::db_context::DbContext;
 use sqlx::{Postgres, Transaction};
 
-/// sqlx::Transaction wrapper for PostgreSQL
-pub struct SqlxDbContext<'a> {
-    transaction: Option<Transaction<'a, Postgres>>,
+pub struct SqlxDbContext {
+    transaction: Option<Transaction<'static, Postgres>>,
 }
 
-impl<'a> SqlxDbContext<'a> {
-    pub fn new(transaction: Transaction<'a, Postgres>) -> Self {
+impl SqlxDbContext {
+    pub fn new(transaction: Transaction<'static, Postgres>) -> Self {
         Self {
             transaction: Some(transaction),
         }
     }
 }
 
-impl<'a> DbContext for SqlxDbContext<'a> {
-    type Tx = Transaction<'a, Postgres>;
+impl DbContext for SqlxDbContext {
+    type Tx = Transaction<'static, Postgres>;
     type Error = anyhow::Error;
 
     fn get_transaction(&mut self) -> &mut Self::Tx {

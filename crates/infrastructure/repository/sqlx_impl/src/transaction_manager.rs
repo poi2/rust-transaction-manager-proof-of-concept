@@ -1,4 +1,4 @@
-//! # Owned SqlX Transaction Manager Implementation
+//! # SqlX Transaction Manager Implementation
 //! # 所有権ベースSqlXトランザクションマネージャー実装
 //!
 //! This is the most advanced implementation that fundamentally redesigns transaction
@@ -38,7 +38,9 @@ use domain::{db_context::DbContext, transaction_manager::TransactionManager};
 use sqlx::PgPool;
 use tokio::sync::Mutex;
 
-/// Owned transaction approach - eliminates unsafe code through architectural redesign
+use crate::SqlxDbContext;
+
+/// transaction approach - eliminates unsafe code through architectural redesign
 /// This implementation takes ownership of transactions instead of borrowing
 ///
 /// オーナーシップトランザクションアプローチ - アーキテクチャ再設計によるunsafeコード排除
@@ -71,66 +73,8 @@ impl SqlxTransactionManager {
     }
 }
 
-/// Owned DbContext that owns its transaction
-/// This eliminates most lifetime issues by taking ownership
-///
-/// トランザクションを所有するOwned DbContext
-/// 所有権を取得することで大部分のライフタイム問題を排除
-pub struct OwnedSqlxDbContext {
-    tx: sqlx::Transaction<'static, sqlx::Postgres>,
-}
-
-impl OwnedSqlxDbContext {
-    pub fn new(tx: sqlx::Transaction<'static, sqlx::Postgres>) -> Self {
-        Self { tx }
-    }
-
-    /// Get a reference to the transaction for query execution
-    /// クエリ実行用のトランザクション参照を取得
-    pub fn transaction(&mut self) -> &mut sqlx::Transaction<'static, sqlx::Postgres> {
-        &mut self.tx
-    }
-
-    /// Consume self and commit the transaction
-    /// selfを消費してトランザクションをコミット
-    pub async fn into_commit(self) -> Result<(), sqlx::Error> {
-        self.tx.commit().await
-    }
-
-    /// Consume self and rollback the transaction
-    /// selfを消費してトランザクションをロールバック
-    pub async fn into_rollback(self) -> Result<(), sqlx::Error> {
-        self.tx.rollback().await
-    }
-}
-
-impl DbContext for OwnedSqlxDbContext {
-    type Tx = sqlx::Transaction<'static, sqlx::Postgres>;
-    type Error = sqlx::Error;
-
-    fn get_transaction(&mut self) -> &mut Self::Tx {
-        &mut self.tx
-    }
-
-    async fn commit(&mut self) -> Result<(), Self::Error> {
-        // Note: This is a compatibility method for DbContext trait
-        // The preferred way is to use into_commit() which consumes self
-        // 注意: これはDbContextトレイトとの互換性のためのメソッド
-        // 推奨はselfを消費するinto_commit()を使用すること
-        Ok(())
-    }
-
-    async fn rollback(&mut self) -> Result<(), Self::Error> {
-        // Note: This is a compatibility method for DbContext trait
-        // The preferred way is to use into_rollback() which consumes self
-        // 注意: これはDbContextトレイトとの互換性のためのメソッド
-        // 推奨はselfを消費するinto_rollback()を使用すること
-        Ok(())
-    }
-}
-
 impl TransactionManager for SqlxTransactionManager {
-    type DbContext = OwnedSqlxDbContext;
+    type DbContext = SqlxDbContext;
     type Error = anyhow::Error;
 
     fn transaction<T, F, Fut>(&self, f: F) -> impl Future<Output = Result<T, Self::Error>> + Send
@@ -155,35 +99,33 @@ impl TransactionManager for SqlxTransactionManager {
                 >(tx)
             };
 
-            let db_context = OwnedSqlxDbContext::new(tx_static);
+            let db_context = SqlxDbContext::new(tx_static);
             let db_context = Arc::new(Mutex::new(db_context));
 
             match f(db_context.clone()).await {
                 Ok(result) => {
-                    // Extract the owned context from Arc<Mutex<T>> to commit
-                    // Arc<Mutex<T>>から所有コンテキストを抽出してコミット
+                    // Extract the context from Arc<Mutex<T>> to commit
+                    // Arc<Mutex<T>>からコンテキストを抽出してコミット
                     match Arc::try_unwrap(db_context) {
                         Ok(mutex) => {
-                            let owned_context = mutex.into_inner();
-                            owned_context.into_commit().await?;
+                            let mut context = mutex.into_inner();
+                            context.commit().await?;
                             Ok(result)
                         }
                         Err(_) => {
                             // Fallback error if Arc::try_unwrap fails (shouldn't happen in normal use)
                             // Arc::try_unwrapが失敗した場合のフォールバックエラー（通常使用では発生しないはず）
-                            Err(anyhow::anyhow!(
-                                "Failed to extract owned context for commit"
-                            ))
+                            Err(anyhow::anyhow!("Failed to extract context for commit"))
                         }
                     }
                 }
                 Err(e) => {
-                    // Extract the owned context from Arc<Mutex<T>> to rollback
-                    // Arc<Mutex<T>>から所有コンテキストを抽出してロールバック
+                    // Extract the context from Arc<Mutex<T>> to rollback
+                    // Arc<Mutex<T>>からコンテキストを抽出してロールバック
                     match Arc::try_unwrap(db_context) {
                         Ok(mutex) => {
-                            let owned_context = mutex.into_inner();
-                            let _ = owned_context.into_rollback().await;
+                            let mut context = mutex.into_inner();
+                            let _ = context.rollback().await;
                         }
                         Err(_) => {
                             // Ignore rollback failure in error case
