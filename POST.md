@@ -243,9 +243,11 @@ Repository を跨いでトランザクションを共有利用するため、`Ar
 use std::{future::Future, sync::Arc};
 use tokio::sync::Mutex;
 
-use crate::db_context::DbContext;
-use crate::inventory::aggregate::Inventory;
-use crate::item::aggregate::ItemId;
+use crate::{
+    db_context::DbContext,
+    inventory::aggregate::Inventory,
+    item::aggregate::ItemId,
+};
 
 #[allow(async_fn_in_trait)]
 pub trait InventoryRepository: Send + Sync {
@@ -295,9 +297,10 @@ TransactionManager trait は、Application layer で使用したトランザク�
 ```rust
 // domain/src/transaction_manager.rs
 
-use std::future::Future;
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
+
 use tokio::sync::Mutex;
+
 use crate::db_context::DbContext;
 
 /// Transaction Manager trait
