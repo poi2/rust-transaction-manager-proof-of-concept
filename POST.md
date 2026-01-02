@@ -18,7 +18,7 @@ https://martinfowler.com/eaaCatalog/unitOfWork.html
 
 当たり前のことですが、SQL の実行には時間がかかるので非同期で実行を行いたいですが、複数のコードが同一トランザクションを共有して SQL を実行すると、一方がトランザクションを終了したあとにもう一方がクエリーを実行した場合、ランタイムエラーを発生させるリスクがあります。
 
-本記事では Rust のアプリケーションにおいて Clean Architecture のような抽象化を行った上で Rust の DB アクセスライブラリーを用い、使い勝手のよいトランザクション管理の方法を提案します。
+本記事では Rust のアプリケーションにおいて Clean Architecture のような抽象化を行った上で Rust の ORM を用い、使い勝手のよいトランザクション管理の方法を提案します。
 
 # 課題の整理
 
@@ -41,7 +41,7 @@ https://martinfowler.com/eaaCatalog/unitOfWork.html
 2. それでいてトランザクションのセッションをクエリーを発行するたびに使い回せること（＝所有権に違反しないこと）
 3. リソース効率を最適化するため、クエリは非同期ランタイム上で実行すること（＝非同期の型パズルを解くこと）
 4. Clean Architecture の依存性逆転の原則を遵守する抽象と実装を隔離を実現すること（＝抽象と実装の型パズルを解くこと）
-5. DB アクセスライブラリー側の具体的な型の特性と上記の抽象とを合わせること（＝抽象と具体的なライブラリーの型パズルを解くこと）
+5. ORM 側の具体的な型の特性と上記の抽象とを合わせること（＝抽象と具体的なライブラリーの型パズルを解くこと）
 
 ひとことでいうと、とても難しいということです。
 
@@ -65,11 +65,11 @@ https://martinfowler.com/eaaCatalog/unitOfWork.html
 
 - パフォーマンスを重視しクエリーは非同期ランタイム上で実行できること（アプリケーションの一般的な要求）
 
-## 言語固有の要件（Rust の制約）
+## 言語固有の制約
 
 - 上記の要求をすべて解消しつつ、型パズルと所有権を満たす安全なコードを書くこと（Rust からの要求）
 
-## SeaORM 固有の要件
+## SeaORM 固有の制約
 
 Clean Architecture では抽象化のために trait を経由でトランザクションを渡す必要があります。
 trait の抽象化されたトランザクションを複数の Repository で使えるようにしたいですが、具体的にどういう抽象化を行えばよいでしょうか？
@@ -78,21 +78,72 @@ trait の抽象化されたトランザクションを複数の Repository で�
 では所有権を渡すことで解決したいですが、SeaORM のトランザクションは Clone ができないため、所有権を渡すこともできません。
 そのため `Arc<Mutex<T>>` パターンを使った排他的共有を行う必要があります。
 
-## sqlx 固有の要件
+## sqlx 固有の制約
 
 sqlx でも SeaORM と同じ抽象化を行う必要があります。
 さらに SeaORM のトランザクションと同じく Clone ができないため、sqlx においても `Arc<Mutex<T>>` パターンを使った排他的共有を行う必要があります。
 
 SeaORM はそれでよいのですが、sqlx のトランザクション `Transaction<'c, DB>` は借用ライフタイムを持つため、またもう一歩複雑になります。
-`Arc<Mutex<T>>` でラップしたトランザクションは sqlx のトランザクションよりも長生きしてしまう可能性があり、Rust はそのライフタイムのミスマッチをコンパイルエラーとして扱います。
 
-根本的な型レベルの矛盾を話すと、`Arc<Mutex<T>>` の T が参照を含む場合、T は静的ライフタイム `'static` である必要がありますが、T の中身である sqlx のトランザクション `Transaction<'c, DB>` は有限ライフタイム `'c` の参照を持っています。
-それぞれの型の要求と実際の型との間にあるライフタイムのミスマッチは Rust のコンパイラーは許さないため、コンパイラーに sqlx のトランザクションを静的ライフタイムとして扱えるように明示的に指示をする必要があります。
-それは Rust の厳格で安全なメモリー管理の世界から逸脱する行いなので unsafe を使って記述する必要があります。
+まず `Arc<Mutex<T>>` の型制約と sqlx の `Transaction<'c, DB>` の型制約が根本的に矛盾しています。
+整理すると以下です。
 
-unsafe によって安全性が保証されない部分をどう局所化し、使い勝手よい I/F をどう提供するための設計も必要になります。
+1. `Arc<Mutex<T>>` の要求
+   - 複数のスレッド間で共有されるため、T は `Send + 'static` を要求する
+   - 特に `'static` 制約により、T に有限ライフタイムの参照を含めることができない
+2. sqlx のトランザクション型 `Transaction<'c, DB>` の特徴
+   - `'c` は有限ライフタイム（通常はコネクションプールからの借用期間）
+   - この `'c` は `'static` ではないため、`Arc<Mutex<T>>` に直接格納できない
 
-sqlx の実装においてはこれらの複雑な要件と型パズルを解くことになります。
+sqlx の実装においてはこれらの複数な要件と型パズルを解くことになります。
+具体的なコードは後述の sqlx の実装で解説します。
+
+TODO: sqlx の実装で以下を解説する。
+
+ではなぜ `Arc` で `'static` が必要なのでしょうか？
+
+```rust
+// これがコンパイルエラーになる理由
+async fn broken_example() {
+    let pool = /* コネクションプール */;
+    let tx = pool.begin().await?;  // tx: Transaction<'pool, Postgres>
+
+    // エラー: 'pool は 'static より短いライフタイム
+    let shared_tx: Arc<Mutex<Transaction<'static, Postgres>>> =
+        Arc::new(Mutex::new(tx)); // ← ここでコンパイルエラー
+}
+```
+
+`Arc` は複数のスレッド間で共有可能であり、非同期ランタイムではタスクが異なるスレッドで実行される可能性があるため、内部のデータが参照する元のリソースよりも長生きすることを防ぐ必要があります。
+そのため、`Arc` に格納するデータは `'static` ライフタイム（静的ライフタイム）を持つ必要があります。
+（今回のユースケースでいうと、非同期ランタイムで安全にトランザクションを共有するために静的ライフタイムが必要になっています）
+
+そこでその矛盾を解消するために有限ライフタイムから静的ライフタイムへの変換が必要です。
+それを行っているのが `unsafe` と `std::mem::transmute` を使っている部分です。
+
+```rust
+let tx_static = unsafe {
+    std::mem::transmute::<
+        Transaction<'_, Postgres>,
+        Transaction<'static, Postgres>
+    >(tx)
+};
+```
+
+これによって以下の問題を解決します。
+
+- トランザクションの所有権を明確に管理
+- トランザクションの仕様を関数のスコープ内に限定
+
+ただし、新たな問題として unsafe によってメモリー管理を手動で行うため、メモリー管理の安全性も手動で保証する必要があります。
+今回の実装では unsafe は TransactionManager の `fn transaction()` の関数スコープ内に完結していてるため、関数を抜けるタイミングで unsafe のメモリー管理が終了することが保証されています。
+そのため、この関数の内側では unsafe ですが、関数の外側では Rust のコンパイラーによる safe なコードが保証されます。
+
+TODO: sqlx の実装で具体的に ①、②、③ のように番号を振って解説する
+
+- `Arc::try_unwrap` により closure に共有したトランザクションの所有権を安全に回収している
+    - このタイミングで `Arc` によるメモリーの排他的共有は終了する
+    - その後、トランザクションの commit/rollback を実行して、トランザクションのセッションを終了する
 
 # 実装
 
@@ -110,55 +161,44 @@ crates/
 │       │   ├── aggregate.rs  # Inventory ビジネスロジック
 │       │   └── repository.rs # InventoryRepository trait
 │       ├── order/
-│       │   ├── aggregate.rs  # Order, CreateOrderCommand
+│       │   ├── aggregate.rs  # Order ビジネスロジック
 │       │   └── repository.rs # OrderRepository trait
+│       ├── item/
+│       │   └── aggregate.rs  # Item ビジネスロジック
 │       ├── db_context.rs     # DbContext trait（DB抽象化）
 │       └── transaction_manager.rs # TransactionManager trait
 ├── use_case/                  # アプリケーション層（共通）
 │   └── src/
 │       └── order_management.rs
 ├── infrastructure/            # 技術詳細
-│   └── src/repository/
+│   └── repository/
 │       ├── sea_orm_impl/      # SeaORM による Repository の実装
-│       │   ├── db_context.rs
-│       │   ├── transaction_manager.rs
-│       │   ├── inventory_repository.rs
-│       │   └── order_repository.rs
+│       │   └── src/
+│       │       ├── db_context.rs
+│       │       ├── transaction_manager.rs
+│       │       ├── inventory_repository.rs
+│       │       └── order_repository.rs
 │       └── sqlx_impl/         # sqlx による Repository の実装
-│           ├── db_context.rs
-│           ├── transaction_manager.rs
-│           ├── inventory_repository.rs
-│           └── order_repository.rs
+│           └── src/
+│               ├── db_context.rs
+│               ├── transaction_manager.rs
+│               ├── inventory_repository.rs
+│               └── order_repository.rs
 ├── application/              # DI + 実行可能ファイル
 │   └── src/
-│       ├── dependency_injection/
-│       │   ├── sea_orm_repository.rs
-│       │   └── sqlx_repository.rs
-│       └── bin/
-│           ├── sea_orm_app.rs
-│           └── sqlx_app.rs
+│       ├── application_container.rs
+│       ├── bin/
+│       │   ├── sea_orm_app.rs
+│       │   └── sqlx_app.rs
+│       └── lib.rs
 └── compose.yaml              # PostgreSQL Docker設定
 ```
 
-この構造により以下を実現しています：
+この構造に要件で提示した機能・非機能要件を実現しています：
 
-- **共通化**: `domain` と `use_case` を共有することで、抽象化の価値を実証
-- **実装交換**: `infrastructure` で ORM 実装を切り替え可能
-- **依存性逆転**: `domain` が `infrastructure` に依存しない
-- **最新慣習**: `mod.rs` ではなく `module.rs + module/` パターンを採用
-- **充実したテスト**: 35個のテスト（Unit + Integration + E2E）
-
-### Schema 分離戦略
-
-PostgreSQL の Schema 機能を使用して、同一データベース内で ORM 実装を分離：
-
-```sql
--- docker/init.sql で自動作成
-CREATE SCHEMA IF NOT EXISTS poc_for_sea_orm;
-CREATE SCHEMA IF NOT EXISTS poc_for_sqlx;
-```
-
-これにより Docker Compose で単一の PostgreSQL インスタンスを使用しながら、両実装を並行してテストできます。
+- 共通化: `domain` と `use_case` は共通のコードを利用する
+- 実装交換: `infrastructure` で SeaORM と sqlx のそれぞれの Repository の実装し、実装が交換可能であることを示す
+- 依存性逆転: `domain` が `infrastructure` に依存しない
 
 ## Domain layer の実装
 
@@ -189,17 +229,20 @@ pub trait DbContext: Send + Sync {
 }
 ```
 
-### Repository trait: CRUD抽象化
+### Repository trait: CRUD 抽象化
 
-実際のユースケースに必要な２つの Repository trait を定義します。在庫操作用の InventoryRepository と注文操作用の OrderRepository です。
+実際のユースケースに必要な２つの Repository trait を定義します。
+在庫操作用の InventoryRepository と注文操作用の OrderRepository です。
 
-**重要なポイント**: `Arc<Mutex<Self::DbContext>>` によってトランザクションを安全に共有しています。
+この Repository は各メソッドの第一引数の `db_context: &Arc<Mutex<Self::DbContext>>` により `DbContext` を受け取ります。
+`DbContext` は内部にトランザクションを持っているので、実行時に `DbContext` からトランザクションを取得します。
+Repository を跨いでトランザクションを共有利用するため、`Arc<Mutex<T>>` を使い排他的な共有を実現しています。
 
 ```rust
 // domain/src/inventory/repository.rs
-use std::future::Future;
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 use tokio::sync::Mutex;
+
 use crate::db_context::DbContext;
 use crate::inventory::aggregate::Inventory;
 use crate::item::aggregate::ItemId;
@@ -258,7 +301,6 @@ use tokio::sync::Mutex;
 use crate::db_context::DbContext;
 
 /// Transaction Manager trait
-#[allow(async_fn_in_trait)]
 pub trait TransactionManager {
     type DbContext: DbContext;
     type Error: Send + Sync + 'static;
@@ -450,57 +492,6 @@ impl TransactionManager for SeaOrmTransactionManager {
 }
 ```
 
-## テスト戦略: 35個の包括的テスト
-
-### テスト構成
-
-| カテゴリ | 場所 | テスト数 | 内容 |
-|----------|------|----------|------|
-| **Unit Tests** | `domain/src/*/tests` | 13個 | ビジネスロジックの単体テスト |
-| **Use Case Tests** | `use_case/src`, `use_case/tests` | 10個 | アプリケーション層のテスト |
-| **Integration Tests** | `infrastructure/tests` | 6個 | DB統合テスト（SeaORM + sqlx Owned実装） |
-| **E2E Tests** | `application/tests` | 6個 | エンドツーエンドテスト |
-
-### 実行方法
-
-```bash
-# PostgreSQL起動
-docker-compose up -d
-
-# テーブル作成
-psql postgres://postgres:password@localhost:5432/poc_transaction_manager -c "
-CREATE TABLE IF NOT EXISTS poc_for_sqlx.inventory (
-    item_id UUID PRIMARY KEY, quantity INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS poc_for_sqlx.orders (
-    id UUID PRIMARY KEY, item_id UUID NOT NULL, quantity INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS poc_for_sea_orm.inventory (
-    item_id UUID PRIMARY KEY, quantity INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS poc_for_sea_orm.orders (
-    id UUID PRIMARY KEY, item_id UUID NOT NULL, quantity INTEGER NOT NULL
-);
-"
-
-# 全テスト実行（データベーステスト含む）
-DATABASE_URL="postgres://postgres:password@localhost:5432/poc_transaction_manager" \
-cargo nextest run --run-ignored all
-
-# 結果: 35 tests run: 35 passed, 0 skipped ✅
-```
-
-### 品質保証
-
-```bash
-# コード品質チェック
-cargo clippy --tests -- -D warnings  # ✅ 警告0個
-cargo fmt --check                     # ✅ フォーマット済み
-
-# ビルド確認
-cargo build --release                 # ✅ ビルド成功
-```
-
 ## 実装のポイントと学び
 
 ### 1. Arc<Mutex<T>>パターンの威力
@@ -559,6 +550,9 @@ Rustの強力な型システムを活用することで、以下を実現：
 - [Unit of Work](https://martinfowler.com/eaaCatalog/unitOfWork.html)
 - [【Rust】アプリケーションのDBトランザクション管理の方法を考える](https://zenn.dev/penysho/articles/a48ca73b757656)
 - TODO: 自分の記事
+- [Arc in std::sync](https://doc.rust-lang.org/std/sync/struct.Arc.html)
+- [Mutex in std::sync](https://doc.rust-lang.org/std/sync/struct.Mutex.html)
+
 
 ---
 
