@@ -34,14 +34,24 @@ impl TransactionManager for SeaOrmTransactionManager {
         let db_context = Arc::new(Mutex::new(db_context));
 
         match f(db_context.clone()).await {
-            Ok(result) => {
-                let mut guard = db_context.lock().await;
-                guard.commit().await?;
-                Ok(result)
-            }
+            Ok(result) => match Arc::try_unwrap(db_context) {
+                Ok(mutex) => {
+                    let context = mutex.into_inner();
+                    context.commit().await?;
+                    Ok(result)
+                }
+                Err(_) => Err(anyhow::anyhow!("Failed to extract context for commit")),
+            },
             Err(e) => {
-                let mut guard = db_context.lock().await;
-                let _ = guard.rollback().await;
+                match Arc::try_unwrap(db_context) {
+                    Ok(mutex) => {
+                        let context = mutex.into_inner();
+                        let _ = context.rollback().await;
+                    }
+                    Err(_) => {
+                        // Ignore rollback failure in error case
+                    }
+                }
                 Err(e)
             }
         }

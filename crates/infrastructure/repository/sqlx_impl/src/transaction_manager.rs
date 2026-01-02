@@ -108,7 +108,7 @@ impl TransactionManager for SqlxTransactionManager {
                     // Arc<Mutex<T>>からコンテキストを抽出してコミット
                     match Arc::try_unwrap(db_context) {
                         Ok(mutex) => {
-                            let mut context = mutex.into_inner();
+                            let context = mutex.into_inner();
                             context.commit().await?;
                             Ok(result)
                         }
@@ -124,7 +124,7 @@ impl TransactionManager for SqlxTransactionManager {
                     // Arc<Mutex<T>>からコンテキストを抽出してロールバック
                     match Arc::try_unwrap(db_context) {
                         Ok(mutex) => {
-                            let mut context = mutex.into_inner();
+                            let context = mutex.into_inner();
                             let _ = context.rollback().await;
                         }
                         Err(_) => {

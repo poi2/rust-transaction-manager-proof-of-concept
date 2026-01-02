@@ -97,11 +97,11 @@ mod tests {
             &mut self.tx
         }
 
-        async fn commit(&mut self) -> Result<(), Self::Error> {
+        async fn commit(self) -> Result<(), Self::Error> {
             Ok(())
         }
 
-        async fn rollback(&mut self) -> Result<(), Self::Error> {
+        async fn rollback(self) -> Result<(), Self::Error> {
             Ok(())
         }
     }

@@ -15,8 +15,10 @@ pub trait DbContext: Send + Sync {
     fn get_transaction(&mut self) -> &mut Self::Tx;
 
     /// Commit transaction (usually called by TransactionManager)
-    async fn commit(&mut self) -> Result<(), Self::Error>;
+    /// Consumes self to prevent reuse after commit
+    async fn commit(self) -> Result<(), Self::Error>;
 
     /// Rollback transaction (usually called by TransactionManager)
-    async fn rollback(&mut self) -> Result<(), Self::Error>;
+    /// Consumes self to prevent reuse after rollback
+    async fn rollback(self) -> Result<(), Self::Error>;
 }

@@ -2,14 +2,12 @@ use domain::db_context::DbContext;
 use sqlx::{Postgres, Transaction};
 
 pub struct SqlxDbContext {
-    transaction: Option<Transaction<'static, Postgres>>,
+    transaction: Transaction<'static, Postgres>,
 }
 
 impl SqlxDbContext {
     pub fn new(transaction: Transaction<'static, Postgres>) -> Self {
-        Self {
-            transaction: Some(transaction),
-        }
+        Self { transaction }
     }
 }
 
@@ -18,26 +16,16 @@ impl DbContext for SqlxDbContext {
     type Error = anyhow::Error;
 
     fn get_transaction(&mut self) -> &mut Self::Tx {
-        self.transaction
-            .as_mut()
-            .expect("Transaction already consumed")
+        &mut self.transaction
     }
 
-    async fn commit(&mut self) -> Result<(), Self::Error> {
-        if let Some(tx) = self.transaction.take() {
-            tx.commit().await?;
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("Transaction already consumed"))
-        }
+    async fn commit(self) -> Result<(), Self::Error> {
+        self.transaction.commit().await?;
+        Ok(())
     }
 
-    async fn rollback(&mut self) -> Result<(), Self::Error> {
-        if let Some(tx) = self.transaction.take() {
-            tx.rollback().await?;
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("Transaction already consumed"))
-        }
+    async fn rollback(self) -> Result<(), Self::Error> {
+        self.transaction.rollback().await?;
+        Ok(())
     }
 }
