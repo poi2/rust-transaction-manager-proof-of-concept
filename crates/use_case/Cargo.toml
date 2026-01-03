@@ -7,3 +7,6 @@ edition = "2021"
 anyhow = { workspace = true }
 domain = { path = "../domain" }
 tokio = { workspace = true }
+
+[features]
+intentional_compile_error = []
