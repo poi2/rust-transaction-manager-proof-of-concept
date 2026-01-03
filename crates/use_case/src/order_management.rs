@@ -42,13 +42,10 @@ where
         let created_order = self
             .transaction_manager
             .transaction(|db_context| {
-                let inventory_repo = Arc::clone(&self.inventory_repository);
-                let order_repo = Arc::clone(&self.order_repository);
-                let order = order.clone();
-
                 async move {
                     // 在庫を取得（排他ロックで同時更新を防止）
-                    let mut inventory = inventory_repo
+                    let mut inventory = self
+                        .inventory_repository
                         .find_by_item_id_for_update(&db_context, order.item_id())
                         .await?
                         .ok_or_else(|| {
@@ -59,10 +56,12 @@ where
                     inventory.decrease_stock(order.quantity())?;
 
                     // 在庫を更新
-                    inventory_repo.update(&db_context, inventory).await?;
+                    self.inventory_repository
+                        .update(&db_context, inventory)
+                        .await?;
 
                     // 注文を保存
-                    let created_order = order_repo.create(&db_context, order).await?;
+                    let created_order = self.order_repository.create(&db_context, order).await?;
 
                     Ok(created_order)
                 }
