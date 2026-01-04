@@ -1,50 +1,114 @@
 Rust アプリケーションにおける実践的トランザクション設計
 -----
 
-# Rustにおけるトランザクション管理の現実解
+# Rust におけるトランザクション管理の現実解
 
-Rustでエンタープライズアプリケーションを構築する際、最初に直面する壁の一つがトランザクション管理です。所有権システムの制約により、他言語では当たり前のパターンが適用できず、多くの開発者が実装に悩むポイントとなっています。
+Rust でエンタープライズアプリケーションを構築する際、最初に直面する壁の一つがトランザクション管理です。
+所有権システムの制約により、他言語では当たり前のパターンが適用できず、多くの開発者が実装に悩むポイントとなっています。
 
-本記事では、実際のプロダクション環境で使用できる実装パターンを、具体的なコード例とともに解説します。SeaORMとsqlxの両方での実装を通じて、実践的なアプローチを提示し、チーム開発での採用判断に役立つ情報をお伝えします。
+本記事では、実際のプロダクション環境で使用できる実装パターンを、具体的なコード例とともに解説します。
+Rust におけるスタンダードな DB アクセスライブラリーである SeaORM と sqlx の両方での実装を通じて、実践的なアプローチを提示します。
 
 # なぜRustでトランザクション管理は困難なのか
 
 ## 所有権システムがもたらす制約
 
-まず、なぜRustでトランザクション管理が困難なのかを、具体的なコード例で見てみましょう。
+まず、なぜ Rust でトランザクション管理が困難なのかを、具体的なコード例で見てみましょう。
+以下は use case の中で複数の Repository が１つのトランザクションを使ってビジネスロジックを実行しようとするコードの例です。
+
+トランザクション管理を TransactionManager に委譲し、commit/rollback を自動化するために Transaction Block パターンを実装しようとすると、以下のようなコードになります：
 
 ```rust
-// これは動作しない
-async fn bad_transaction_sharing() -> Result<(), Error> {
-    let mut tx = db.begin().await?;
+async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, String> {
+    let order = Order::from(command).unwrap();
 
-    // 両方のRepositoryで同じトランザクションを使いたいが...
-    inventory_repo.update(&mut tx, inventory).await?; // tx の可変借用
-    order_repo.create(&mut tx, order).await?;         // コンパイルエラー！
+    let created_order = self
+        .transaction_manager
+        .transaction(|db_context| {
+            Box::pin(async move {
+                // 在庫を取得（排他ロックで同時更新を防止）
+                let mut inventory = self
+                    .inventory_repository
+                    .find_by_item_id_for_update(db_context, order.item_id())
+                    .await?;
 
-    tx.commit().await?;
-    Ok(())
+                // 在庫を更新
+                self.inventory_repository
+                    .update(db_context, inventory)
+                    .await?;
+
+                // 注文を保存
+                let created_order = self
+                    .order_repository
+                    .create(db_context, order)
+                    .await?;
+
+                Ok(created_order)
+            })
+        })
+        .await?;
+
+    Ok(created_order)
 }
 ```
 
-Rustの借用チェッカーは、`&mut tx` の可変借用が同時に複数存在することを禁止します。これは安全性の観点では正しい判断ですが、実際のアプリケーション開発では大きな障壁となります。
+このコードをコンパイルしようとすると、以下のエラーが発生します：
+
+```text
+error: lifetime may not live long enough
+  --> crates/use_case/src/examples/pattern2_transaction_block_fails.rs:99:21
+   |
+93 |           async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, String> {
+   |                                 - let's call the lifetime of this reference `'1`
+...
+99 | /                     Box::pin(async move {
+   | |_____________________^
+   | |
+   | returning this value requires that `'1` must outlive `'static`
+```
+
+このエラーは、`async move` ブロック内で `db_context: &mut DbContext` を使用しようとすることで発生します。
+`async move` ブロックは `'static` な Future を要求しますが、`db_context` のライフタイムはクロージャ引数に束縛されているため、この要件を満たせません。
+根本的に、この設計では `&mut` の借用を複数の Repository 呼び出しで共有できないのです。
+
+<details>
+<summary>トランザクションの可変借用が制限される背景</summary>
+トランザクション構造体は、DB との通信を通じて内部状態を絶えず変化させるため、可変性を必要とします。
+マルチスレッドで１つのトランザクションに対して無秩序に利用できてしまうと、
+
+- 通信が競合して意図しない結果になるリスク（データ競合の問題）
+- 誰かが commit/rollback して無効になったトランザクションを別の誰かが利用してしまうリスク（UAF（Use-After-Free）の問題）
+
+という危険性を抱えることになります。
+このような問題を回避するために Rust では可変借用を同時に持てるのは１つのスレッドだけという制約を課しています。
+</details>
 
 ## 他言語なら簡単な理由
 
-他言語でトランザクション管理が簡単な理由を理解することで、Rustでの課題がより明確になります。
+他言語でトランザクション管理が簡単な理由を理解することで、Rust での課題がより明確になります。
 
-### Java: AOP + ThreadLocal
+以下では Java、Golang、C#、Ruby においてどのようにトランザクション管理を行っているか小さな例を持って説明しています。
+
+各言語ごとに好まれるデザインは様々ですが、それぞれスタンダードな解決方法が定まっています。
+一方 Rust は、コンパイル時の厳格な所有権チェックにより、将来したアプローチを簡単に導入できない状況にあります。
+
+### Java: Spring @Transactional
+
+Java の Spring フレームワークでは `@Transactional` アノテーションを使うことで、トランザクション管理を行えます。
+
 ```java
 @Transactional
 public void createOrder(Order order) {
-    // トランザクションは透明に管理される
     inventoryRepository.update(inventory);
     orderRepository.create(order);
-    // 自動的にcommit/rollback
 }
 ```
 
-### Go: context伝播
+### Golang: context 伝播
+
+Golang では context を経由して必要なデータを伝播させます。
+context にトランザクションオブジェクトをセットし利用する方法があります。
+
 ```go
 func CreateOrder(ctx context.Context, order Order) error {
     tx, err := db.BeginTx(ctx, nil)
@@ -53,7 +117,7 @@ func CreateOrder(ctx context.Context, order Order) error {
     }
     defer tx.Rollback() // 自動ロールバック
 
-    // contextを通じてトランザクションを伝播
+    // context を通じてトランザクションを伝播
     if err := inventoryRepo.Update(ctx, tx, inventory); err != nil {
         return err
     }
@@ -65,7 +129,10 @@ func CreateOrder(ctx context.Context, order Order) error {
 }
 ```
 
-### C#: using文 + DI
+### C#: Entity Framework
+
+C# では DB コンテキストが変更を自動で追跡し、Commit で一括保存する Unit of Work パターンが一般的です。
+
 ```csharp
 using (var transaction = context.Database.BeginTransaction())
 {
@@ -75,17 +142,27 @@ using (var transaction = context.Database.BeginTransaction())
 }
 ```
 
-これらの言語では、ランタイムレベルでの参照共有や、言語機能・フレームワークによる透明な管理が可能です。一方Rustは、コンパイル時の厳格な所有権チェックにより、これらのアプローチが使用できません。
+### Ruby: Ruby on Rails ActiveRecord
 
-## Rustでの技術的制約
+Ruby では Ruby on Rails の ActiveRecord によってトランザクション管理は隠蔽されており、宣言して書くだけで要件を満たすことができます。
 
-Rustでトランザクション管理を実現するには、以下の制約をすべて満たす必要があります：
+```ruby
+ActiveRecord::Base.transaction do
+  inventory.update!(...)
+  order.save!(...)
+end
+```
 
-1. **排他的所有権**: トランザクションの所有者は常に一意
-2. **安全な共有**: 複数Repositoryからの同時アクセス防止
-3. **非同期対応**: 非同期ランタイムでの型安全性確保
-4. **抽象化**: Clean Architectureなどの依存性逆転原則への対応
-5. **ORM互換性**: SeaORM、sqlx等の具体的なライブラリとの統合
+
+## Rust での技術的制約
+
+Rust でトランザクション管理を実現しつつ現実的な実装に落とし込むには、以下の制約をすべて満たす必要があります：
+
+1. 排他的所有権: トランザクションの所有者を常に一意にすること
+2. 安全な共有: 複数 Repository でトランザクションを共有しつつ、同時アクセス防止すること
+3. 非同期対応: 非同期ランタイムでの型安全性確保
+4. 抽象化: Clean Architecture などの依存性逆転原則への対応
+5. ORM 互換性: SeaORM、sqlx 等の具体的なライブラリとの統合
 
 これらすべてを同時に満たす「現実解」が必要になります。
 
