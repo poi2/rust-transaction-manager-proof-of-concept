@@ -24,7 +24,7 @@ mod integration_tests {
             item_id: item_id.clone(),
             quantity: 3,
         };
-        let order = Order::from(command).unwrap();
+        let order = Order::try_from(command).unwrap();
 
         // Simulate inventory update
         inventory.decrease_stock(order.quantity()).unwrap();
@@ -40,7 +40,7 @@ mod integration_tests {
             item_id,
             quantity: 5,
         };
-        let order = Order::from(command).unwrap();
+        let order = Order::try_from(command).unwrap();
 
         // Should fail due to insufficient stock
         let result = inventory.decrease_stock(order.quantity());

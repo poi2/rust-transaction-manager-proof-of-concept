@@ -31,7 +31,7 @@
 ///
 /// ```ignore
 /// async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, String> {
-///     let order = Order::from(command).unwrap();
+///     let order = Order::try_from(command).unwrap();
 ///
 ///     let created_order = self
 ///         .transaction_manager
@@ -48,7 +48,7 @@
 ///                     .update(db_context, inventory)
 ///                     .await?;
 ///
-///                 // 注文を保存
+///                 // 注文を作成
 ///                 let created_order = self
 ///                     .order_repository
 ///                     .create(db_context, order)
@@ -112,12 +112,12 @@ mod compile_error_example {
     struct DbContext;
 
     trait TransactionManager {
-        async fn transaction<F, T>(&self, f: F) -> Result<T, String>
+        async fn transaction<F, T>(&self, f: F) -> anyhow::Result<T>
         where
             F: for<'a> FnOnce(
                     &'a mut DbContext,
                 ) -> std::pin::Pin<
-                    Box<dyn std::future::Future<Output = Result<T, String>> + Send + 'a>,
+                    Box<dyn std::future::Future<Output = anyhow::Result<T>> + Send + 'a>,
                 > + Send;
     }
 
@@ -126,13 +126,13 @@ mod compile_error_example {
             &self,
             db_context: &mut DbContext,
             item_id: &ItemId,
-        ) -> impl std::future::Future<Output = Result<Option<Inventory>, String>> + Send;
+        ) -> impl std::future::Future<Output = anyhow::Result<Option<Inventory>>> + Send;
 
         fn update(
             &self,
             db_context: &mut DbContext,
             inventory: Inventory,
-        ) -> impl std::future::Future<Output = Result<(), String>> + Send;
+        ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
     }
 
     trait OrderRepository {
@@ -140,7 +140,7 @@ mod compile_error_example {
             &self,
             db_context: &mut DbContext,
             order: Order,
-        ) -> impl std::future::Future<Output = Result<Order, String>> + Send;
+        ) -> impl std::future::Future<Output = anyhow::Result<Order>> + Send;
     }
 
     struct OrderManagementUseCase<TM, IR, OR> {
@@ -149,14 +149,15 @@ mod compile_error_example {
         order_repository: Arc<OR>,
     }
 
+    // FIXME: Error 周りを一致させる
     impl<TM, IR, OR> OrderManagementUseCase<TM, IR, OR>
     where
         TM: TransactionManager + Send + Sync,
         IR: InventoryRepository + Send + Sync,
         OR: OrderRepository + Send + Sync,
     {
-        async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, String> {
-            let order = Order::from(command).unwrap();
+        async fn create_order(&self, command: CreateOrderCommand) -> anyhow::Result<Order> {
+            let order = Order::try_from(command).unwrap();
 
             let created_order = self
                 .transaction_manager
@@ -166,25 +167,21 @@ mod compile_error_example {
                         let mut inventory = self
                             .inventory_repository
                             .find_by_item_id_for_update(db_context, order.item_id())
-                            .await
-                            .unwrap()
-                            .unwrap();
+                            .await?
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("Inventory not found for item: {}", order.item_id())
+                            })?;
 
                         // 注文分の在庫を減らす
-                        inventory.decrease_stock(order.quantity()).unwrap();
+                        inventory.decrease_stock(order.quantity())?;
 
                         // 在庫を更新
                         self.inventory_repository
                             .update(db_context, inventory)
-                            .await
-                            .unwrap();
+                            .await?;
 
-                        // 注文を保存
-                        let created_order = self
-                            .order_repository
-                            .create(db_context, order)
-                            .await
-                            .unwrap();
+                        // 注文を作成
+                        let created_order = self.order_repository.create(db_context, order).await?;
 
                         Ok(created_order)
                     })

@@ -37,7 +37,7 @@ where
     }
 
     pub async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, TM::Error> {
-        let order = Order::from(command)?;
+        let order = Order::try_from(command)?;
 
         let created_order = self
             .transaction_manager
@@ -60,7 +60,7 @@ where
                         .update(&db_context, inventory)
                         .await?;
 
-                    // 注文を保存
+                    // 注文を作成
                     let created_order = self.order_repository.create(&db_context, order).await?;
 
                     Ok(created_order)

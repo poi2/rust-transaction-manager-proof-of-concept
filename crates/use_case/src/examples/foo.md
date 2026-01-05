@@ -63,7 +63,7 @@ where
     OR: OrderRepository<DbContext = TM::DbContext> + Send + Sync,
 {
     async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, String> {
-        let order = Order::from(command).unwrap();
+        let order = Order::try_from(command).unwrap();
 
         let created_order = self
             .transaction_manager
@@ -88,7 +88,7 @@ where
                         .map_err(|_| "Failed to update inventory")
                         .unwrap();
 
-                    // 注文を保存
+                    // 注文を作成
                     let created_order = self
                         .order_repository
                         .create(db_context, order)

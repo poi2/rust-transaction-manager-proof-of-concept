@@ -81,7 +81,7 @@ where
             .update(&mut db_context, inventory)
             .await?;
 
-        // 注文を保存
+        // 注文を作成
         let created_order = self.order_repository.create(&mut db_context, order).await?;
 
         db_context.commit().await?;

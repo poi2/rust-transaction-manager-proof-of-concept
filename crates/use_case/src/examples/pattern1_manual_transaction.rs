@@ -85,7 +85,7 @@
 ///         let mut db_context = self.transaction_manager.begin().await
 ///             .map_err(|_| "Failed to begin transaction")?;
 ///
-///         let order = Order::from(command).map_err(|e| e.to_string())?;
+///         let order = Order::try_from(command).map_err(|e| e.to_string())?;
 ///
 ///         // 在庫を取得（排他ロック）
 ///         let mut inventory = self

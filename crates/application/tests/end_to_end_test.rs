@@ -66,8 +66,8 @@ mod end_to_end_tests {
         };
 
         // Both should create equivalent orders
-        let order1 = domain::order::aggregate::Order::from(command1).unwrap();
-        let order2 = domain::order::aggregate::Order::from(command2).unwrap();
+        let order1 = domain::order::aggregate::Order::try_from(command1).unwrap();
+        let order2 = domain::order::aggregate::Order::try_from(command2).unwrap();
 
         assert_eq!(order1.quantity(), order2.quantity());
         assert_eq!(order1.item_id(), order2.item_id());
@@ -95,7 +95,7 @@ mod end_to_end_tests {
                 };
                 // In a real test, this would use actual DI and repositories
                 // For now, just verify the command can be created
-                domain::order::aggregate::Order::from(command)
+                domain::order::aggregate::Order::try_from(command)
             });
         }
 
@@ -122,7 +122,7 @@ mod end_to_end_tests {
             quantity: -5, // Invalid
         };
 
-        let result = domain::order::aggregate::Order::from(command);
+        let result = domain::order::aggregate::Order::try_from(command);
         assert!(result.is_err());
 
         // Test insufficient inventory scenario simulation

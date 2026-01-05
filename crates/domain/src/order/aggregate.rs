@@ -82,8 +82,10 @@ pub struct CreateOrderCommand {
     pub quantity: i32,
 }
 
-impl Order {
-    pub fn from(command: CreateOrderCommand) -> Result<Self, OrderError> {
+impl TryFrom<CreateOrderCommand> for Order {
+    type Error = OrderError;
+
+    fn try_from(command: CreateOrderCommand) -> Result<Self, Self::Error> {
         Self::new(OrderId::new(), command.item_id, command.quantity)
     }
 }
@@ -154,7 +156,7 @@ mod tests {
             quantity: 3,
         };
 
-        let order = Order::from(command).unwrap();
+        let order = Order::try_from(command).unwrap();
         assert_eq!(order.item_id(), &item_id);
         assert_eq!(order.quantity(), 3);
     }
@@ -167,7 +169,7 @@ mod tests {
             quantity: -1,
         };
 
-        let result = Order::from(command);
+        let result = Order::try_from(command);
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
