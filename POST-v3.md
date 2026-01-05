@@ -64,38 +64,48 @@ pub trait TransactionManager {
             > + Send;
 }
 
-// create_order function
-async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, String> {
-    let order = Order::from(command).unwrap();
+// create_order ユースケース
+impl<TM, IR, OR> OrderManagementUseCase<TM, IR, OR>
+where
+    TM: TransactionManager + Send + Sync,
+    IR: InventoryRepository + Send + Sync,
+    OR: OrderRepository + Send + Sync,
+{
+    async fn create_order(&self, command: CreateOrderCommand) -> anyhow::Result<Order> {
+        let order = Order::try_from(command).unwrap();
 
-    let created_order = self
-        .transaction_manager
-        .transaction(|db_context| { // Transaction Block を生成
-            Box::pin(async move {
-                // 在庫を取得（排他ロックで同時更新を防止）
-                let mut inventory = self
-                    .inventory_repository
-                    .find_by_item_id_for_update(db_context, order.item_id())
-                    .await?
-                    .ok_or("Inventory not found")?;
+        let created_order = self
+            .transaction_manager
+            .transaction(|db_context| {
+                Box::pin(async move {
+                    // 在庫を取得（排他ロックで同時更新を防止）
+                    let mut inventory = self
+                        .inventory_repository
+                        .find_by_item_id_for_update(db_context, order.item_id())
+                        .await?
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("Inventory not found for item: {}", order.item_id())
+                        })?;
 
-                // 在庫を更新
-                self.inventory_repository
-                    .update(db_context, inventory)
-                    .await?;
+                    // 注文分の在庫を減らす
+                    inventory.decrease_stock(order.quantity())?;
 
-                // 注文を保存
-                let created_order = self
-                    .order_repository
-                    .create(db_context, order)
-                    .await?;
+                    // 在庫を更新
+                    self.inventory_repository
+                        .update(db_context, inventory)
+                        .await?;
 
-                Ok(created_order)
+                    // 注文を作成
+                    let created_order = self.order_repository.create(db_context, order).await?;
+
+                    Ok(created_order)
+                })
             })
-        }) // 成功時は自動 commit、エラー時は自動 rollback
-        .await?;
+            .await
+            .unwrap();
 
-    Ok(created_order)
+        Ok(created_order)
+    }
 }
 ```
 
@@ -105,7 +115,7 @@ async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, Strin
 error: lifetime may not live long enough
    --> crates/use_case/src/examples/pattern2_transaction_block_fails.rs:164:21
     |
-158 |           async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, String> {
+158 |           async fn create_order(&self, command: CreateOrderCommand) -> anyhow::Result<Order> {
     |                                 - let's call the lifetime of this reference `'1`
 ...
 164 | /                     Box::pin(async move {
@@ -113,8 +123,8 @@ error: lifetime may not live long enough
 166 | |                         let mut inventory = self
 167 | |                             .inventory_repository
 ...   |
-189 | |                         Ok(created_order)
-190 | |                     })
+185 | |                         Ok(created_order)
+186 | |                     })
     | |______________________^ returning this value requires that `'1` must outlive `'static`
 
 error: could not compile `use_case` (lib) due to 1 previous error
@@ -146,7 +156,7 @@ error: could not compile `use_case` (lib) due to 1 previous error
 
 ```rust
 async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, String> {
-    let order = Order::from(command);
+    let order = Order::try_from(command)?;
     let mut db_context = self.transaction_manager.begin().await?;
 
     let mut inventory = self
@@ -325,7 +335,7 @@ pub trait TransactionManager {
 }
 ```
 
-### Step 4: 具体的実装
+### Step 4: TransactionManager と Repository の実装
 
 ここからは TransactionManager や Repository の実装を行っていきます。
 ORM として SeaORM と sqlx を対象としています。
@@ -579,38 +589,45 @@ impl InventoryRepository for SqlxInventoryRepository {
 }
 ```
 
-### Step 5: ビジネスロジックでの使用
+### Step 5: ユースケースの実装
 
-Application層でトランザクションを使用します。
+最後に Application 層にユースケースを実装します。
+ここまで作ってきた TransactionManager や Repository を使ってビジネスロジックを組み立てましょう。
+
+が、実は最初に提示したコンパイルエラーになるコードとほぼ同じです。
+
+差分は利用している TransactionManager と Repository の trait にあります。
+重複した内容になりますが、TransactionManager が提供し Repository が利用する `db_context` を `Arc<Mutex<DbContext>>` と定義することで、安全にトランザクション管理ができるようになりました。
 
 ```rust
 // use_case/src/order_management.rs
 
 pub async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, TM::Error> {
-    let order = Order::from(command)?;
+    let order = Order::try_from(command)?;
 
     let created_order = self
         .transaction_manager
         .transaction(|db_context| {
-            let inventory_repo = Arc::clone(&self.inventory_repository);
-            let order_repo = Arc::clone(&self.order_repository);
-            let order = order.clone();
-
             async move {
-                // 在庫を取得（排他ロック）
-                let mut inventory = inventory_repo
+                // 在庫を取得（排他ロックで同時更新を防止）
+                let mut inventory = self
+                    .inventory_repository
                     .find_by_item_id_for_update(&db_context, order.item_id())
                     .await?
-                    .ok_or_else(|| anyhow::anyhow!("Inventory not found"))?;
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("Inventory not found for item: {}", order.item_id())
+                    })?;
 
-                // ドメインロジック：在庫減少
+                // 注文分の在庫を減らす
                 inventory.decrease_stock(order.quantity())?;
 
-                // 在庫更新
-                inventory_repo.update(&db_context, inventory).await?;
+                // 在庫を更新
+                self.inventory_repository
+                    .update(&db_context, inventory)
+                    .await?;
 
-                // 注文作成
-                let created_order = order_repo.create(&db_context, order).await?;
+                // 注文を作成
+                let created_order = self.order_repository.create(&db_context, order).await?;
 
                 Ok(created_order)
             }
@@ -621,61 +638,11 @@ pub async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, T
 }
 ```
 
-このコードは、最初に示した「エラーになるコード」とほぼ同じ構造ですが、`Arc<Mutex<DbContext>>` を使うことで：
+# 本番利用する際の考慮事項
 
-✅ **コンパイル成功**
-✅ **自動commit/rollback**
-✅ **型安全性**
-✅ **透過的なトランザクション管理**
+TODO: ここまで書いた。
 
-すべてを実現できています。
-
-## パターン2: Unit of Work
-
-より高度な場面では、Unit of Workパターンも検討できます。
-
-### 基本概念
-
-```rust
-pub struct UnitOfWork {
-    changes: Vec<Box<dyn Change>>,
-    db_context: Arc<Mutex<dyn DbContext>>,
-}
-
-impl UnitOfWork {
-    pub fn register_new<T>(&mut self, entity: T) {
-        self.changes.push(Box::new(InsertChange::new(entity)));
-    }
-
-    pub fn register_dirty<T>(&mut self, entity: T) {
-        self.changes.push(Box::new(UpdateChange::new(entity)));
-    }
-
-    pub async fn commit(&mut self) -> Result<(), Error> {
-        for change in &self.changes {
-            change.execute(&self.db_context).await?;
-        }
-        self.changes.clear();
-        Ok(())
-    }
-}
-```
-
-### 適用場面
-
-- **複雑なビジネスロジック**: 多数のエンティティ操作がある場合
-- **バッチ処理**: まとめてコミットしたい場合
-- **監査ログ**: 変更履歴の追跡が必要
-
-### 実装コスト vs 効果
-
-Unit of Workは強力ですが実装コストが高く、多くの場面では `Arc<Mutex>` パターンで十分です。
-
-# 本番運用での考慮事項
-
-## パフォーマンス特性の理解
-
-### Arc<Mutex>のオーバーヘッド
+## `Arc<Mutex>` のオーバーヘッド
 
 実際のベンチマーク結果（参考値）：
 
@@ -689,52 +656,13 @@ Arc<Mutex> access: 150ns per operation (50% overhead)
 // ただし実際のデータベースI/O (1ms+) に比べれば無視できるレベル
 ```
 
-### ボトルネック分析
+## デッドロック回避戦略
 
-```rust
-// パフォーマンス問題が起きやすいパターン
-async fn performance_anti_pattern() {
-    for item in large_item_list {
-        // 各反復でMutexロック取得・解放
-        let guard = db_context.lock().await;
-        repository.process_item(&guard, item).await;
-        // ここでロック解放
-    }
-}
+TODO: Repository クエリーと TransactionManager の commit/rollback では lock を取るためデッドロックが発生するリスクがある。
+それは現実的には発生しないことを説明する。
 
-// 改善版
-async fn performance_optimized() {
-    let guard = db_context.lock().await; // 一度だけロック
-    for item in large_item_list {
-        repository.process_item_with_guard(&guard, item).await;
-    }
-    // 最後にロック解放
-}
-```
 
-## 運用上の注意点
-
-### デッドロック回避戦略
-
-```rust
-// デッドロックが起きやすいパターン
-async fn deadlock_prone() {
-    let guard1 = db_context1.lock().await;
-    let guard2 = db_context2.lock().await; // 他のタスクが逆順でロックすると危険
-}
-
-// 改善：ロック順序の統一
-async fn deadlock_safe() {
-    // 常に同じ順序でロック取得
-    let (guard1, guard2) = if id1 < id2 {
-        (db_context1.lock().await, db_context2.lock().await)
-    } else {
-        (db_context2.lock().await, db_context1.lock().await)
-    };
-}
-```
-
-### エラーハンドリング戦略
+## エラーハンドリング戦略
 
 ```rust
 // 構造化エラーハンドリング
@@ -768,7 +696,7 @@ match transaction_result {
 }
 ```
 
-### 監視とロギング
+## 監視とロギング
 
 ```rust
 // トランザクション実行時間の監視
