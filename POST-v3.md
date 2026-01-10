@@ -9,6 +9,8 @@ Rust でエンタープライズアプリケーションを構築する際、ト
 本記事では、実際のプロダクション環境で使用できる実装パターンを、具体的なコード例とともに解説します。
 Rust におけるスタンダードな DB アクセスライブラリーである SeaORM と sqlx の両方での実装を通じて、実践的なアプローチを提示します。
 
+TODO: DB を MySQL や PostgreSQL のような一般的な RDBMS であることを明記すること。
+
 # なぜRustでトランザクション管理は困難なのか
 
 ## 理想的なトランザクション管理とは
@@ -640,216 +642,129 @@ pub async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, T
 
 # 本番利用する際の考慮事項
 
-TODO: ここまで書いた。
+## `Arc<Mutex>` のオーバーヘッドとは
 
-## `Arc<Mutex>` のオーバーヘッド
+`Arc<Mutex>` のオーバーヘッドは、どれくらい激しく競合が起こるかによって決まります。
+競合が頻繁に発生すれば遅くなりますし、競合がなければ高速に処理がされます。
 
-実際のベンチマーク結果（参考値）：
+では競合がなければ本当に高速に処理できるのか確認しましょう。
+
+`Arc<Mutex>` 自体を生成し、競合なしのロックを取るのにかかる時間を計測してみましょう。
+１回のトランザクションの処理で 10 回の Repository の関数を呼び出すという設定のもと、`Arc<Mutex>` を１回生成し、そこから 10 回のロックを取得する処理を計測しました。
+実行環境は Apple M4 Pro です。
 
 ```rust
-// 直接アクセス vs Arc<Mutex>アクセス
-// 単純なクエリ実行での比較
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
-Direct access:     100ns per operation
-Arc<Mutex> access: 150ns per operation (50% overhead)
+fn main() {
+    let n = 1_000_000;
 
-// ただし実際のデータベースI/O (1ms+) に比べれば無視できるレベル
+    let start = Instant::now();
+    for _ in 0..n {
+        let data = Arc::new(Mutex::new(0));
+        for _ in 0..10 {
+            let _lock = data.lock().unwrap();
+        }
+    }
+    let duration = start.elapsed();
+
+    println!("Total time: {:?}", duration);
+    println!("Per Arc<Mutex> creation + 10 locks: {:?}", duration / n);
+}
+
 ```
+
+```
+> rustc bench_mutex.rs -O -o bench_mutex && ./bench_mutex
+Total time: 91.133083ms
+Per Arc<Mutex> creation + 10 locks: 91ns
+```
+
+`Arc<Mutex>`のオーバーヘッドは 91 ns、一方で DB クエリは 1 ms 以上かかるため、オーバーヘッドは無視できるレベルです。
 
 ## デッドロック回避戦略
 
-TODO: Repository クエリーと TransactionManager の commit/rollback では lock を取るためデッドロックが発生するリスクがある。
-それは現実的には発生しないことを説明する。
+`Arc<Mutex>` で競合がなければ高速に処理できることは確認できました。
+では、本当にトランザクションで `Arc<Mutex>` を使ったとき、競合は起こらないのでしょうか？
 
+一般的な RDBMS の一般的な設定においては、１つのトランザクションは１つの DB コネクションです。
+したがって、コネクション上ではクエリーの実行はシリアルな実行になります。
+
+また、SeaORM のトランザクションも sqlx のトランザクションも Clone を実装していないため、１つのトランザクションが複数のコードから利用されることはありません。
+`Arc<Mutex>` を使えばそれが可能になりますが、ロックを取ってからクエリーを実行できるので、やはりクエリーはシリアルに実行されます。
+
+Rust はマルチスレッドなランタイムがあるため、クエリーを同時に実行するコードは書けます。
+以下のように同時に Foo と Bar を作成しようとすると、片方がロックを取得し、もう片方はロックの解放を待つことになります。
+ロックの確保に無駄な処理を発生させる可能性はありますが、デッドロックを引き起こしません。
+
+```rust
+tokio::join!(
+    foo_repository.create_foo(&db_context, foo),
+    bar_repository.create_bar(&db_context, bar),
+)
+```
+
+上記のコードはシリアルに書く方が極めて自然であり、この場合はクエリーは上から順番に実行されることになります。
+
+```rust
+foo_repository.create_foo(&db_context, foo).await?;
+bar_repository.create_bar(&db_context, bar).await?;
+```
+
+## パフォーマンス最適化のためのクエリーの並列実行
+
+単一トランザクション内では、前述の通りクエリはシリアルに実行されます。
+もしトランザクション間のデータ一貫性が不要で、複数のクエリを並列実行したい場合は、複数のトランザクションを使うことができます。
+
+読み取り用途でデータの一貫性の保証が不要であり、IO 待ちを削減したい場合に有効なパターンです。
+
+```rust
+let (foo_result, bar_result) = tokio::join!(
+    transaction_manager.transaction(|db_context| async move {
+        foo_repository.get_foo_by_id(&db_context, foo_id).await
+    }),
+    transaction_manager.transaction(|db_context| async move {
+        bar_repository.get_bar_by_id(&db_context, bar_id).await
+    }),
+);
+```
+
+ただし以下の注意点があります。
+
+- 別トランザクションで実行されるため ACID の保証がない
+- コネクションプールの枯渇のリスクが生じる
+- いずれかあるいは両方が失敗する可能性があるため、エラーハンドリングが複雑になる
 
 ## エラーハンドリング戦略
 
-```rust
-// 構造化エラーハンドリング
-#[derive(thiserror::Error, Debug)]
-pub enum TransactionError {
-    #[error("Database error: {0}")]
-    Database(#[from] sqlx::Error),
+今回はトランザクションのロジックにフォーカスするために anyhow を使ったイージーなエラーハンドリングを行いました。
 
-    #[error("Business rule violation: {message}")]
-    BusinessRule { message: String },
+本番環境では、DB エラーやビジネスロジックエラーを識別可能にし、適切なエラーハンドリングとリトライ戦略を実装する必要があります。
+以下は構造化エラーの例です。
+
+```rust
+#[derive(thiserror::Error, Debug)]
+pub enum TransactionError<BRE: std::error::Error> {
+    // SeaORM や sqlx のエラー
+    #[error("Database error: {0}")]
+    Database(#[from] sea_orm::error::DbErr),
+
+    #[error("Transaction error")]
+    Transaction(#[from] TransactionError),
 
     #[error("Concurrency conflict")]
     Concurrency,
-
-    #[error("Transaction timeout")]
-    Timeout,
-}
-
-// エラー別の回復戦略
-match transaction_result {
-    Err(TransactionError::Concurrency) => {
-        // 再試行戦略
-        retry_with_backoff().await
-    }
-    Err(TransactionError::BusinessRule { .. }) => {
-        // ログ記録して呼び出し元にエラー返却
-        log::warn!("Business rule violation: {}", err);
-        return Err(err);
-    }
-    _ => return Err(err),
 }
 ```
+
+このような構造体であれば、エラー種別に応じてエラーメッセージの生成、ロギング、リトライなどを実装可能にすることができます。
+詳細な実装パターンについては本記事のスコープ外とします。
 
 ## 監視とロギング
 
-```rust
-// トランザクション実行時間の監視
-#[tracing::instrument(skip(f))]
-async fn transaction<T, F, Fut>(&self, f: F) -> Result<T, Self::Error>
-where
-    F: FnOnce(Arc<Mutex<Self::DbContext>>) -> Fut + Send,
-    Fut: Future<Output = Result<T, Self::Error>> + Send,
-{
-    let start = std::time::Instant::now();
-
-    let result = /* トランザクション実行 */;
-
-    let duration = start.elapsed();
-    if duration > Duration::from_millis(1000) {
-        tracing::warn!(duration_ms = duration.as_millis(), "Slow transaction detected");
-    }
-
-    result
-}
-```
-
-## チーム導入指針
-
-### 段階的移行戦略
-
-**Phase 1: 学習フェーズ (1-2週間)**
-```rust
-// 既存コードを部分的に移行
-// 単一Repositoryから始める
-let result = transaction_manager.transaction(|db_context| async move {
-    repository.simple_operation(&db_context, data).await
-}).await?;
-```
-
-**Phase 2: 実践フェーズ (2-4週間)**
-```rust
-// 複数Repository連携
-// ビジネスロジックの複雑化
-transaction_manager.transaction(|db_context| async move {
-    let inventory = inventory_repo.find_for_update(&db_context, id).await?;
-    let updated = business_logic.process(inventory)?;
-    inventory_repo.update(&db_context, updated).await?;
-    order_repo.create(&db_context, order).await
-}).await?;
-```
-
-**Phase 3: 最適化フェーズ (継続的)**
-```rust
-// パフォーマンス最適化
-// エラーハンドリングの充実
-// 監視の導入
-```
-
-### コードレビューポイント
-
-1. **トランザクション境界**: 適切なスコープ設定
-2. **エラーハンドリング**: rollback の確実な実行
-3. **パフォーマンス**: 不要な長時間ロック
-4. **テスタビリティ**: モックしやすい設計
-
-### テスト戦略
-
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // インメモリデータベースでの統合テスト
-    #[tokio::test]
-    async fn test_transaction_rollback() {
-        let pool = create_test_pool().await;
-        let tx_manager = TestTransactionManager::new(pool);
-
-        let result = tx_manager.transaction(|db_context| async move {
-            repository.create(&db_context, valid_data).await?;
-            repository.create(&db_context, invalid_data).await // エラーになる
-        }).await;
-
-        assert!(result.is_err());
-        // ロールバック確認
-        assert_eq!(repository.count().await, 0);
-    }
-
-    // モックを使った単体テスト
-    #[tokio::test]
-    async fn test_business_logic() {
-        let mut mock_repo = MockInventoryRepository::new();
-        mock_repo.expect_find_for_update()
-                 .returning(|_| Ok(Some(test_inventory())));
-
-        let result = business_logic.process_order(mock_repo, order).await;
-        assert!(result.is_ok());
-    }
-}
-```
-
-# 実装選択の判断基準
-
-## プロジェクト規模による選択
-
-### 小規模プロジェクト (< 10万行)
-- **推奨**: Arc<Mutex>パターン
-- **理由**: シンプルで学習コストが低い
-- **注意点**: パフォーマンス要件の事前確認
-
-### 中規模プロジェクト (10-50万行)
-- **推奨**: Arc<Mutex> + 部分的にUnit of Work
-- **理由**: 複雑性とパフォーマンスのバランス
-- **注意点**: 設計一貫性の維持
-
-### 大規模プロジェクト (50万行+)
-- **推奨**: カスタムソリューション検討
-- **理由**: 特定要件への最適化が必要
-- **注意点**: 保守性と性能の両立
-
-## チーム経験による選択
-
-### Rust初心者中心
-```rust
-// シンプルなパターンに特化
-// 学習曲線を考慮した設計
-transaction_manager.simple_transaction(|tx| {
-    repository.update(tx, data)
-}).await?;
-```
-
-### Rust経験者中心
-```rust
-// 高度なパターンも積極採用
-// 型安全性を最大限活用
-transaction_manager
-    .with_isolation(IsolationLevel::Serializable)
-    .with_timeout(Duration::from_secs(30))
-    .transaction(complex_business_logic)
-    .await?;
-```
-
-## 長期保守性の考慮
-
-### 技術負債の管理
-- **ドキュメント化**: パターンの採用理由を明記
-- **テストカバレッジ**: トランザクション境界の網羅
-- **リファクタリング**: 定期的な設計見直し
-
-### 技術進化への対応
-```rust
-// 将来的にasync traitが安定したら移行できる設計
-#[async_trait]
-pub trait FutureRepository {
-    async fn find(&self, ctx: &TransactionContext, id: Id) -> Result<Entity>;
-}
-```
+本番環境では、トランザクションのパフォーマンス監視とエラーロギングは重要です。
+OpenTelemetry などでトレーシングを取得し、SeaORM や sqlx、あるいは RDBMS 側でスロークエリーログを有効化してください。
 
 # まとめ: 実用的な選択基準
 
