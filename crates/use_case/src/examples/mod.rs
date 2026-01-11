@@ -24,4 +24,6 @@
 //!    `Arc<Mutex<DbContext>>`による解決策を学習
 
 pub mod pattern1_manual_transaction;
+
+#[cfg(feature = "intentional_compile_error")]
 pub mod pattern2_transaction_block_fails;

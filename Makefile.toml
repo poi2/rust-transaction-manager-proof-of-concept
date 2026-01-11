@@ -134,7 +134,7 @@ args = ["-c", "cargo +nightly fmt"]
 [tasks.clippy]
 description = "Run clippy linter"
 command = "cargo"
-args = ["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+args = ["clippy", "--all-targets", "--", "-D", "warnings"]
 
 [tasks.check]
 description = "Quick compile check"

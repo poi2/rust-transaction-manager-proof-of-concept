@@ -33,7 +33,7 @@ async fn main() -> Result<(), anyhow::Error> {
         }
         Err(e) => {
             eprintln!("Failed to create order: {e}");
-            Err(e.into())
+            Err(e)
         }
     }
 }
