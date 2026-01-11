@@ -14,7 +14,7 @@ impl ItemId {
         Self(Uuid::new_v4())
     }
 
-    pub fn as_uuid(&self) -> &Uuid {
+    pub fn uuid(&self) -> &Uuid {
         &self.0
     }
 }

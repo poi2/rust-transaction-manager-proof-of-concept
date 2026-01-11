@@ -29,7 +29,7 @@ impl OrderRepository for SqlxOrderRepository {
 
         let result =
             sqlx::query("SELECT id, item_id, quantity FROM poc_for_sqlx.orders WHERE id = $1")
-                .bind(id.as_uuid())
+                .bind(id.uuid())
                 .fetch_optional(&mut **txn)
                 .await?;
 
@@ -54,8 +54,8 @@ impl OrderRepository for SqlxOrderRepository {
         let txn = guard.get_transaction();
 
         sqlx::query("INSERT INTO poc_for_sqlx.orders (id, item_id, quantity) VALUES ($1, $2, $3)")
-            .bind(order.id().as_uuid())
-            .bind(order.item_id().as_uuid())
+            .bind(order.id().uuid())
+            .bind(order.item_id().uuid())
             .bind(order.quantity())
             .execute(&mut **txn)
             .await?;

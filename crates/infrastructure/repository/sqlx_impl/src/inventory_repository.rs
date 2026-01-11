@@ -28,7 +28,7 @@ impl InventoryRepository for SqlxInventoryRepository {
         let result = sqlx::query(
             "SELECT item_id, quantity FROM poc_for_sqlx.inventory WHERE item_id = $1 FOR UPDATE",
         )
-        .bind(item_id.as_uuid())
+        .bind(item_id.uuid())
         .fetch_optional(&mut **txn)
         .await?;
 
@@ -53,7 +53,7 @@ impl InventoryRepository for SqlxInventoryRepository {
 
         let result =
             sqlx::query("SELECT item_id, quantity FROM poc_for_sqlx.inventory WHERE item_id = $1")
-                .bind(item_id.as_uuid())
+                .bind(item_id.uuid())
                 .fetch_optional(&mut **txn)
                 .await?;
 
@@ -77,7 +77,7 @@ impl InventoryRepository for SqlxInventoryRepository {
         let txn = guard.get_transaction();
 
         sqlx::query("INSERT INTO poc_for_sqlx.inventory (item_id, quantity) VALUES ($1, $2)")
-            .bind(inventory.item_id().as_uuid())
+            .bind(inventory.item_id().uuid())
             .bind(inventory.quantity())
             .execute(&mut **txn)
             .await?;
@@ -95,7 +95,7 @@ impl InventoryRepository for SqlxInventoryRepository {
 
         sqlx::query("UPDATE poc_for_sqlx.inventory SET quantity = $1 WHERE item_id = $2")
             .bind(inventory.quantity())
-            .bind(inventory.item_id().as_uuid())
+            .bind(inventory.item_id().uuid())
             .execute(&mut **txn)
             .await?;
 

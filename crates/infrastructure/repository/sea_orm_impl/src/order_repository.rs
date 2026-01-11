@@ -44,7 +44,7 @@ impl OrderRepository for SeaOrmOrderRepository {
         let txn = guard.get_transaction();
 
         let result = Entity::find()
-            .filter(Column::Id.eq(*id.as_uuid()))
+            .filter(Column::Id.eq(*id.uuid()))
             .one(txn)
             .await?;
 
@@ -66,8 +66,8 @@ impl OrderRepository for SeaOrmOrderRepository {
         let txn = guard.get_transaction();
 
         let active_model = ActiveModel {
-            id: Set(*order.id().as_uuid()),
-            item_id: Set(*order.item_id().as_uuid()),
+            id: Set(*order.id().uuid()),
+            item_id: Set(*order.item_id().uuid()),
             quantity: Set(order.quantity()),
         };
 

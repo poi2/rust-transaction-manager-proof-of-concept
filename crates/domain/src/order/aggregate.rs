@@ -16,7 +16,7 @@ impl OrderId {
         Self(Uuid::new_v4())
     }
 
-    pub fn as_uuid(&self) -> &Uuid {
+    pub fn uuid(&self) -> &Uuid {
         &self.0
     }
 }
@@ -178,7 +178,7 @@ mod tests {
         let uuid = Uuid::new_v4();
         let order_id = OrderId::from(uuid);
 
-        assert_eq!(order_id.as_uuid(), &uuid);
+        assert_eq!(order_id.uuid(), &uuid);
         assert_eq!(Uuid::from(order_id.clone()), uuid);
     }
 }

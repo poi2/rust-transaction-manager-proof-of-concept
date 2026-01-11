@@ -41,7 +41,7 @@ impl InventoryRepository for SeaOrmInventoryRepository {
         let txn = guard.get_transaction();
 
         let result = Entity::find()
-            .filter(Column::ItemId.eq(*item_id.as_uuid()))
+            .filter(Column::ItemId.eq(*item_id.uuid()))
             .lock_exclusive()
             .one(txn)
             .await?;
@@ -64,7 +64,7 @@ impl InventoryRepository for SeaOrmInventoryRepository {
         let txn = guard.get_transaction();
 
         let result = Entity::find()
-            .filter(Column::ItemId.eq(*item_id.as_uuid()))
+            .filter(Column::ItemId.eq(*item_id.uuid()))
             .one(txn)
             .await?;
 
@@ -86,7 +86,7 @@ impl InventoryRepository for SeaOrmInventoryRepository {
         let txn = guard.get_transaction();
 
         let active_model = ActiveModel {
-            item_id: Set(*inventory.item_id().as_uuid()),
+            item_id: Set(*inventory.item_id().uuid()),
             quantity: Set(inventory.quantity()),
         };
 
@@ -103,7 +103,7 @@ impl InventoryRepository for SeaOrmInventoryRepository {
         let txn = guard.get_transaction();
 
         let active_model = ActiveModel {
-            item_id: Set(*inventory.item_id().as_uuid()),
+            item_id: Set(*inventory.item_id().uuid()),
             quantity: Set(inventory.quantity()),
         };
 
