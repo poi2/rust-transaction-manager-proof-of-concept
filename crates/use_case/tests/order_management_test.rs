@@ -194,10 +194,12 @@ mod order_management_integration_tests {
 
         let result = use_case.create_order(command).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Insufficient stock"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Insufficient stock")
+        );
     }
 
     #[tokio::test]
@@ -217,10 +219,12 @@ mod order_management_integration_tests {
 
         let result = use_case.create_order(command).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Inventory not found"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Inventory not found")
+        );
     }
 
     #[tokio::test]
@@ -241,10 +245,12 @@ mod order_management_integration_tests {
 
         let result = use_case.create_order(command).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Order creation failed"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Order creation failed")
+        );
     }
 
     #[tokio::test]
@@ -265,10 +271,12 @@ mod order_management_integration_tests {
 
         let result = use_case.create_order(command).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Transaction failed"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Transaction failed")
+        );
     }
 
     #[tokio::test]
@@ -309,10 +317,12 @@ mod order_management_integration_tests {
 
         let result = use_case.create_order(command).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Quantity must be positive"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Quantity must be positive")
+        );
     }
 
     #[tokio::test]
@@ -332,9 +342,11 @@ mod order_management_integration_tests {
 
         let result = use_case.create_order(command).await;
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Quantity must be positive"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Quantity must be positive")
+        );
     }
 }

@@ -1,7 +1,7 @@
 [package]
 name = "application"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "sea_orm_app"
@@ -13,10 +13,10 @@ path = "src/bin/sqlx_app.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-domain = { path = "../domain" }
-sea_orm_impl = { path = "../infrastructure/repository/sea_orm_impl" }
+domain = { workspace = true }
+sea_orm_impl = { workspace = true }
 sqlx = { workspace = true }
-sqlx_impl = { path = "../infrastructure/repository/sqlx_impl" }
+sqlx_impl = { workspace = true }
 tokio = { workspace = true }
-use_case = { path = "../use_case" }
+use_case = { workspace = true }
 uuid = { workspace = true }

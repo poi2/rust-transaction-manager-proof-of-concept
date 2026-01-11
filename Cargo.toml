@@ -12,7 +12,11 @@ resolver = "2"
 [workspace.dependencies]
 anyhow = { version = "1.0.100", features = ["std"] }
 async-trait = "0.1"
+domain = { path = "crates/domain" }
 futures = "0.3"
+sea_orm_impl = { path = "crates/infrastructure/repository/sea_orm_impl" }
 sqlx = { version = "0.8.6", features = [ "postgres", "runtime-tokio", "tls-native-tls", "uuid" ] }
+sqlx_impl = { path = "crates/infrastructure/repository/sqlx_impl" }
 tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros"] }
+use_case = { path = "crates/use_case" }
 uuid = { version = "1.18.1", features = ["v4"] }

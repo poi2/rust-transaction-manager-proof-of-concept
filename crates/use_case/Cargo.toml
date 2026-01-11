@@ -1,12 +1,12 @@
 [package]
 name = "use_case"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [features]
 intentional_compile_error = []
 
 [dependencies]
 anyhow = { workspace = true }
-domain = { path = "../domain" }
+domain = { workspace = true }
 tokio = { workspace = true }
