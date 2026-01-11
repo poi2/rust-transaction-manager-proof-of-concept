@@ -1,27 +1,27 @@
 [profile.default]
-# 並行実行数を制限（DB接続の競合回避）
+# Limit parallel execution to avoid DB connection conflicts
 test-threads = 4
-# 失敗したテストを最初に実行
+# Continue running tests after failures
 fail-fast = false
-# テスト実行時間の上限
+# Maximum test execution time
 slow-timeout = { period = "120s" }
-# テスト詳細出力
+# Test output detail level
 status-level = "all"
 
 [profile.ci] 
-# CI環境用プロファイル
+# Profile for CI environments
 test-threads = 2
 fail-fast = true
 slow-timeout = { period = "60s" }
 status-level = "fail"
 
 [profile.integration]
-# 統合テスト用プロファイル
-test-threads = 1  # DB操作の競合を完全回避
+# Profile for integration tests
+test-threads = 1  # Completely avoid DB operation conflicts
 slow-timeout = { period = "300s" }
 status-level = "all"
 
-# テストグループ定義
+# Test group definitions
 [[profile.default.overrides]]
 filter = "test(integration)"
 slow-timeout = { period = "180s" }
