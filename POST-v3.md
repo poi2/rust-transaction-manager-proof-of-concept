@@ -9,7 +9,7 @@ Rust でエンタープライズアプリケーションを構築する際、ト
 本記事では、実際のプロダクション環境で使用できる実装パターンを、具体的なコード例とともに解説します。
 Rust におけるスタンダードな DB アクセスライブラリーである SeaORM と sqlx の両方での実装を通じて、実践的なアプローチを提示します。
 
-本記事では、PostgreSQL や MySQL のような一般的な RDBMS を対象として、トランザクション機能を持つデータベースを前提とした実装パターンを解説します。
+本記事では、PostgreSQL や MySQL のようなトランザクション機能を持つ RDBMS を対象としています。
 
 # なぜRustでトランザクション管理は困難なのか
 
@@ -256,7 +256,6 @@ order_repository.create(&db_context, order).await?;
 ### Step 1: トランザクション抽象化の設計
 
 まず、DB や ORM に依存しない抽象化レイヤーを定義します。
-（トランザクションの管理手法の提案のため、トランザクションのある DB を前提としています）
 
 ```rust
 // domain/src/db_context.rs
@@ -676,7 +675,7 @@ fn main() {
 ```
 
 ```
-> rustc bench_mutex.rs -O -o bench_mutex && ./bench_mutex
+> rustc benches/arc_mutex_overhead.rs -O -o benches/arc_mutex_overhead && benches/arc_mutex_overhead
 Total time: 91.133083ms
 Per Arc<Mutex> creation + 10 locks: 91ns
 ```
@@ -750,8 +749,8 @@ pub enum TransactionError<BRE: std::error::Error> {
     #[error("Database error: {0}")]
     Database(#[from] sea_orm::error::DbErr),
 
-    #[error("Transaction error")]
-    Transaction(#[from] TransactionError),
+    #[error("Business rule violation")]
+    BusinessRule(BRE),
 
     #[error("Concurrency conflict")]
     Concurrency,
