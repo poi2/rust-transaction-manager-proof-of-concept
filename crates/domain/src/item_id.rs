@@ -8,10 +8,6 @@ impl ItemId {
         Self(Uuid::new_v4())
     }
 
-    pub fn from_uuid(id: Uuid) -> Self {
-        Self(id)
-    }
-
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
     }

@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use domain::{
     db_context::DbContext,
-    item::aggregate::ItemId,
     order::{
         aggregate::{Order, OrderId},
         repository::OrderRepository,
@@ -39,8 +38,7 @@ impl OrderRepository for SqlxOrderRepository {
                 let id: uuid::Uuid = row.try_get("id")?;
                 let item_id: uuid::Uuid = row.try_get("item_id")?;
                 let quantity: i32 = row.try_get("quantity")?;
-                let order =
-                    Order::new(OrderId::from_uuid(id), ItemId::from_uuid(item_id), quantity)?;
+                let order = Order::new(id.into(), item_id.into(), quantity)?;
                 Ok(Some(order))
             }
             None => Ok(None),

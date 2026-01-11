@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use domain::{
     db_context::DbContext,
-    item::aggregate::ItemId,
     order::{
         aggregate::{Order, OrderId},
         repository::OrderRepository,
@@ -51,11 +50,7 @@ impl OrderRepository for SeaOrmOrderRepository {
 
         match result {
             Some(model) => {
-                let order = Order::new(
-                    OrderId::from_uuid(model.id),
-                    ItemId::from_uuid(model.item_id),
-                    model.quantity,
-                )?;
+                let order = Order::new(model.id.into(), model.item_id.into(), model.quantity)?;
                 Ok(Some(order))
             }
             None => Ok(None),

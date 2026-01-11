@@ -48,7 +48,7 @@ impl InventoryRepository for SeaOrmInventoryRepository {
 
         match result {
             Some(model) => {
-                let inventory = Inventory::new(ItemId::from_uuid(model.item_id), model.quantity)?;
+                let inventory = Inventory::new(model.item_id.into(), model.quantity)?;
                 Ok(Some(inventory))
             }
             None => Ok(None),
@@ -70,7 +70,7 @@ impl InventoryRepository for SeaOrmInventoryRepository {
 
         match result {
             Some(model) => {
-                let inventory = Inventory::new(ItemId::from_uuid(model.item_id), model.quantity)?;
+                let inventory = Inventory::new(model.item_id.into(), model.quantity)?;
                 Ok(Some(inventory))
             }
             None => Ok(None),

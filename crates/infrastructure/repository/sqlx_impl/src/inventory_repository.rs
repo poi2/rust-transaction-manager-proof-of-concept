@@ -36,7 +36,7 @@ impl InventoryRepository for SqlxInventoryRepository {
             Some(row) => {
                 let item_id: uuid::Uuid = row.try_get("item_id")?;
                 let quantity: i32 = row.try_get("quantity")?;
-                let inventory = Inventory::new(ItemId::from_uuid(item_id), quantity)?;
+                let inventory = Inventory::new(item_id.into(), quantity)?;
                 Ok(Some(inventory))
             }
             None => Ok(None),
@@ -61,7 +61,7 @@ impl InventoryRepository for SqlxInventoryRepository {
             Some(row) => {
                 let item_id: uuid::Uuid = row.try_get("item_id")?;
                 let quantity: i32 = row.try_get("quantity")?;
-                let inventory = Inventory::new(ItemId::from_uuid(item_id), quantity)?;
+                let inventory = Inventory::new(item_id.into(), quantity)?;
                 Ok(Some(inventory))
             }
             None => Ok(None),

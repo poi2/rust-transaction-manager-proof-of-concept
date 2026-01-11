@@ -16,10 +16,6 @@ impl OrderId {
         Self(Uuid::new_v4())
     }
 
-    pub fn from_uuid(id: Uuid) -> Self {
-        Self(id)
-    }
-
     pub fn as_uuid(&self) -> &Uuid {
         &self.0
     }
@@ -180,7 +176,7 @@ mod tests {
     #[test]
     fn test_order_id_conversion() {
         let uuid = Uuid::new_v4();
-        let order_id = OrderId::from_uuid(uuid);
+        let order_id = OrderId::from(uuid);
 
         assert_eq!(order_id.as_uuid(), &uuid);
         assert_eq!(Uuid::from(order_id.clone()), uuid);
