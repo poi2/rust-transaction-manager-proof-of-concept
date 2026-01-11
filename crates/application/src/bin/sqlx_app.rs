@@ -29,11 +29,11 @@ async fn main() -> Result<(), anyhow::Error> {
     match app.order_management_use_case.create_order(command).await {
         Ok(order) => {
             println!("Order created successfully: {order:?}");
+            Ok(())
         }
         Err(e) => {
-            println!("Failed to create order: {e}");
+            eprintln!("Failed to create order: {e}");
+            Err(e.into())
         }
     }
-
-    Ok(())
 }

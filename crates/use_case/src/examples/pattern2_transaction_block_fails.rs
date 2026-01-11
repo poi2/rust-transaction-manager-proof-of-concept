@@ -149,7 +149,6 @@ mod compile_error_example {
         order_repository: Arc<OR>,
     }
 
-    // FIXME: Error 周りを一致させる
     impl<TM, IR, OR> OrderManagementUseCase<TM, IR, OR>
     where
         TM: TransactionManager + Send + Sync,
