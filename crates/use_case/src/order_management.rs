@@ -1,11 +1,8 @@
 use std::sync::Arc;
 
 use domain::{
-    inventory::repository::InventoryRepository,
-    order::{
-        aggregate::{CreateOrderCommand, Order},
-        repository::OrderRepository,
-    },
+    inventory::{InventoryQuantity, InventoryRepository},
+    order::{CreateOrderCommand, Order, OrderRepository},
     transaction_manager::TransactionManager,
 };
 
@@ -19,8 +16,9 @@ impl<TM, IR, OR> OrderManagementUseCase<TM, IR, OR>
 where
     TM: TransactionManager + Send + Sync,
     TM::Error: From<anyhow::Error>
-        + From<domain::inventory::aggregate::InventoryError>
-        + From<domain::order::aggregate::QuantityError>,
+        + From<domain::inventory::InventoryError>
+        + From<domain::inventory::InventoryQuantityError>
+        + From<domain::order::OrderQuantityError>,
     IR: InventoryRepository<DbContext = TM::DbContext, Error = TM::Error>,
     OR: OrderRepository<DbContext = TM::DbContext, Error = TM::Error>,
 {
@@ -53,7 +51,9 @@ where
                         })?;
 
                     // 注文分の在庫を減らす
-                    inventory.decrease_stock(order.quantity())?;
+                    let inventory_quantity =
+                        InventoryQuantity::try_from(i32::from(order.quantity()))?;
+                    inventory.decrease_stock(inventory_quantity)?;
 
                     // 在庫を更新
                     self.inventory_repository
@@ -76,10 +76,7 @@ where
 mod tests {
     use std::sync::Arc;
 
-    use domain::{
-        db_context::DbContext, inventory::aggregate::Inventory, item::aggregate::ItemId,
-        order::aggregate::OrderId,
-    };
+    use domain::{db_context::DbContext, inventory::Inventory, item::ItemId, order::OrderId};
     use tokio::sync::Mutex;
 
     use super::*;

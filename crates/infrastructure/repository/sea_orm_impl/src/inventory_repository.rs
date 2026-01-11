@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use domain::{
     db_context::DbContext,
-    inventory::{aggregate::Inventory, repository::InventoryRepository},
-    item::aggregate::ItemId,
+    inventory::{Inventory, InventoryRepository},
+    item::ItemId,
 };
 // SeaORM entity definitions (would typically be in a separate entities module)
 use sea_orm::entity::prelude::*;

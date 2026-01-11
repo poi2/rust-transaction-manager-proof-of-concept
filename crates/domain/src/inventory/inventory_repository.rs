@@ -2,7 +2,7 @@ use std::{future::Future, sync::Arc};
 
 use tokio::sync::Mutex;
 
-use crate::{db_context::DbContext, inventory::aggregate::Inventory, item::aggregate::ItemId};
+use crate::{db_context::DbContext, inventory::Inventory, item::ItemId};
 
 pub trait InventoryRepository: Send + Sync {
     type DbContext: DbContext;

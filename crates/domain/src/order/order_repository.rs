@@ -1,10 +1,11 @@
-use std::future::Future;
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
+
 use tokio::sync::Mutex;
 
-use crate::db_context::DbContext;
-use crate::order_aggregate::Order;
-use crate::order_id::OrderId;
+use crate::{
+    db_context::DbContext,
+    order::{Order, OrderId},
+};
 
 pub trait OrderRepository: Send + Sync {
     type DbContext: DbContext;

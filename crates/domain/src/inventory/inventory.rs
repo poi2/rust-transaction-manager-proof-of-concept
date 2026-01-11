@@ -1,4 +1,5 @@
-use crate::{item::aggregate::ItemId, order::aggregate::Quantity};
+use super::inventory_quantity::InventoryQuantity;
+use crate::item::ItemId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Inventory {
@@ -23,7 +24,7 @@ impl Inventory {
         self.quantity
     }
 
-    pub fn decrease_stock(&mut self, amount: Quantity) -> Result<(), InventoryError> {
+    pub fn decrease_stock(&mut self, amount: InventoryQuantity) -> Result<(), InventoryError> {
         let amount_i32 = i32::from(amount);
 
         if self.quantity < amount_i32 {
@@ -108,7 +109,7 @@ mod tests {
         let item_id = ItemId::new();
         let mut inventory = Inventory::new(item_id, 10).unwrap();
 
-        let quantity = Quantity::new(3).unwrap();
+        let quantity = InventoryQuantity::new(3).unwrap();
         inventory.decrease_stock(quantity).unwrap();
         assert_eq!(inventory.quantity(), 7);
     }
@@ -118,7 +119,7 @@ mod tests {
         let item_id = ItemId::new();
         let mut inventory = Inventory::new(item_id, 5).unwrap();
 
-        let quantity = Quantity::new(10).unwrap();
+        let quantity = InventoryQuantity::new(10).unwrap();
         let result = inventory.decrease_stock(quantity);
         assert!(result.is_err());
         assert!(matches!(

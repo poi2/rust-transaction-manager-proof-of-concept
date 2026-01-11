@@ -3,12 +3,9 @@ mod repository_integration_tests {
     use std::sync::Arc;
 
     use domain::{
-        inventory::{aggregate::Inventory, repository::InventoryRepository},
-        item::aggregate::ItemId,
-        order::{
-            aggregate::{Order, OrderId, Quantity},
-            repository::OrderRepository,
-        },
+        inventory::{Inventory, InventoryQuantity, InventoryRepository},
+        item::ItemId,
+        order::{Order, OrderId, OrderQuantity, OrderRepository},
         transaction_manager::TransactionManager,
     };
 
@@ -60,7 +57,7 @@ mod repository_integration_tests {
                         // Update
                         let mut updated_inventory = found.unwrap();
                         updated_inventory
-                            .decrease_stock(Quantity::new(30).unwrap())
+                            .decrease_stock(InventoryQuantity::new(30).unwrap())
                             .unwrap();
                         let updated = repo.update(&db_context, updated_inventory).await?;
                         assert_eq!(updated.quantity(), 70);
@@ -86,7 +83,7 @@ mod repository_integration_tests {
             let repo = Arc::new(SeaOrmOrderRepository);
             let order_id = OrderId::new();
             let item_id = ItemId::new();
-            let order = Order::new(order_id.clone(), item_id, Quantity::new(5).unwrap());
+            let order = Order::new(order_id.clone(), item_id, OrderQuantity::new(5).unwrap());
 
             let result = transaction_manager
                 .transaction(|db_context| {
@@ -167,7 +164,7 @@ mod repository_integration_tests {
             let repo = Arc::new(SqlxOrderRepository);
             let order_id = OrderId::new();
             let item_id = ItemId::new();
-            let order = Order::new(order_id.clone(), item_id, Quantity::new(3).unwrap());
+            let order = Order::new(order_id.clone(), item_id, OrderQuantity::new(3).unwrap());
 
             let result = transaction_manager
                 .transaction(|db_context| {
@@ -201,10 +198,10 @@ mod repository_integration_tests {
 
         // Both should behave identically
         inventory1
-            .decrease_stock(Quantity::new(30).unwrap())
+            .decrease_stock(InventoryQuantity::new(30).unwrap())
             .unwrap();
         inventory2
-            .decrease_stock(Quantity::new(30).unwrap())
+            .decrease_stock(InventoryQuantity::new(30).unwrap())
             .unwrap();
 
         assert_eq!(inventory1.quantity(), inventory2.quantity());

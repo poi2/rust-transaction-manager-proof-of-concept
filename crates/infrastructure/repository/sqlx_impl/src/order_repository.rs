@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use domain::{
     db_context::DbContext,
-    order::{
-        aggregate::{Order, OrderId},
-        repository::OrderRepository,
-    },
+    order::{Order, OrderId, OrderRepository},
 };
 use sqlx::Row;
 use tokio::sync::Mutex;

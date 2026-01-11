@@ -104,9 +104,9 @@ mod compile_error_example {
     use std::sync::Arc;
 
     use domain::{
-        inventory::aggregate::Inventory,
-        item::aggregate::ItemId,
-        order::aggregate::{CreateOrderCommand, Order},
+        inventory::Inventory,
+        item::ItemId,
+        order::{CreateOrderCommand, Order},
     };
 
     struct DbContext;

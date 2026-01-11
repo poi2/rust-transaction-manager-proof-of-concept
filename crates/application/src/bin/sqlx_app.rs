@@ -1,7 +1,7 @@
 use std::env;
 
 use application::ApplicationContainer;
-use domain::{item::aggregate::ItemId, order::aggregate::CreateOrderCommand};
+use domain::{item::ItemId, order::CreateOrderCommand};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

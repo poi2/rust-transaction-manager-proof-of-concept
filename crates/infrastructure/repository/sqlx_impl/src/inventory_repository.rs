@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use domain::{
     db_context::DbContext,
-    inventory::{aggregate::Inventory, repository::InventoryRepository},
-    item::aggregate::ItemId,
+    inventory::{Inventory, InventoryRepository},
+    item::ItemId,
 };
 use sqlx::Row;
 use tokio::sync::Mutex;

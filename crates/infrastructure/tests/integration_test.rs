@@ -2,9 +2,9 @@
 mod integration_tests {
 
     use domain::{
-        inventory::aggregate::Inventory,
-        item::aggregate::ItemId,
-        order::aggregate::{CreateOrderCommand, Order},
+        inventory::{Inventory, InventoryQuantity},
+        item::ItemId,
+        order::{CreateOrderCommand, Order},
     };
 
     // Note: These are integration tests that require Docker and would be more complex
@@ -27,7 +27,8 @@ mod integration_tests {
         let order = Order::try_from(command).unwrap();
 
         // Simulate inventory update
-        inventory.decrease_stock(order.quantity()).unwrap();
+        let inventory_quantity = InventoryQuantity::try_from(i32::from(order.quantity())).unwrap();
+        inventory.decrease_stock(inventory_quantity).unwrap();
         assert_eq!(inventory.quantity(), 7);
     }
 
@@ -43,7 +44,8 @@ mod integration_tests {
         let order = Order::try_from(command).unwrap();
 
         // Should fail due to insufficient stock
-        let result = inventory.decrease_stock(order.quantity());
+        let inventory_quantity = InventoryQuantity::try_from(i32::from(order.quantity())).unwrap();
+        let result = inventory.decrease_stock(inventory_quantity);
         assert!(result.is_err());
     }
 }

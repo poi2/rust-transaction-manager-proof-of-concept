@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use domain::{db_context::DbContext, inventory::aggregate::Inventory, order::aggregate::Order};
+use domain::{db_context::DbContext, inventory::Inventory, order::Order};
 
 trait TransactionManager {
     type DbContext: DbContext;
@@ -26,7 +26,7 @@ trait InventoryRepository {
     async fn find_by_item_id_for_update(
         &self,
         _db_context: &mut Self::DbContext,
-        _item_id: &domain::item::aggregate::ItemId,
+        _item_id: &domain::item::ItemId,
     ) -> Result<Option<Inventory>, Self::Error>;
 
     async fn update(
@@ -57,8 +57,8 @@ impl<TM, IR, OR> OrderManagementUseCase<TM, IR, OR>
 where
     TM: TransactionManager + Send + Sync,
     TM::Error: From<anyhow::Error>
-        + From<domain::inventory::aggregate::InventoryError>
-        + From<domain::order::aggregate::QuantityError>
+        + From<domain::inventory::InventoryError>
+        + From<domain::order::QuantityError>
         + From<<<TM as TransactionManager>::DbContext as DbContext>::Error>,
     IR: InventoryRepository<DbContext = TM::DbContext, Error = TM::Error>,
     OR: OrderRepository<DbContext = TM::DbContext, Error = TM::Error>,

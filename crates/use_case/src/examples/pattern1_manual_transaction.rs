@@ -25,9 +25,9 @@
 /// ```rust
 /// use domain::{
 ///     db_context::DbContext,
-///     inventory::aggregate::Inventory,
-///     item::aggregate::ItemId,
-///     order::aggregate::{CreateOrderCommand, Order},
+///     inventory::{Inventory, InventoryQuantity},
+///     item::ItemId,
+///     order::{CreateOrderCommand, Order},
 /// };
 ///
 /// // トランザクション管理を提供するtrait
@@ -96,7 +96,9 @@
 ///             .ok_or("Inventory not found")?;
 ///
 ///         // ドメインロジック：在庫減少
-///         inventory.decrease_stock(order.quantity())
+///         let inventory_quantity = InventoryQuantity::try_from(i32::from(order.quantity()))
+///             .map_err(|e| e.to_string())?;
+///         inventory.decrease_stock(inventory_quantity)
 ///             .map_err(|e| e.to_string())?;
 ///
 ///         // 在庫更新

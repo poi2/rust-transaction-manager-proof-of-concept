@@ -1,9 +1,9 @@
 #[cfg(test)]
 mod end_to_end_tests {
     use domain::{
-        inventory::aggregate::Inventory,
-        item::aggregate::ItemId,
-        order::aggregate::{CreateOrderCommand, Quantity},
+        inventory::{Inventory, InventoryQuantity},
+        item::ItemId,
+        order::CreateOrderCommand,
     };
 
     #[tokio::test]
@@ -67,8 +67,8 @@ mod end_to_end_tests {
         };
 
         // Both should create equivalent orders
-        let order1 = domain::order::aggregate::Order::try_from(command1).unwrap();
-        let order2 = domain::order::aggregate::Order::try_from(command2).unwrap();
+        let order1 = domain::order::Order::try_from(command1).unwrap();
+        let order2 = domain::order::Order::try_from(command2).unwrap();
 
         assert_eq!(order1.quantity(), order2.quantity());
         assert_eq!(order1.item_id(), order2.item_id());
@@ -96,7 +96,7 @@ mod end_to_end_tests {
                 };
                 // In a real test, this would use actual DI and repositories
                 // For now, just verify the command can be created
-                domain::order::aggregate::Order::try_from(command)
+                domain::order::Order::try_from(command)
             });
         }
 
@@ -123,12 +123,12 @@ mod end_to_end_tests {
             quantity: -5, // Invalid
         };
 
-        let result = domain::order::aggregate::Order::try_from(command);
+        let result = domain::order::Order::try_from(command);
         assert!(result.is_err());
 
         // Test insufficient inventory scenario simulation
         let mut inventory = Inventory::new(ItemId::new(), 5).unwrap();
-        let decrease_result = inventory.decrease_stock(Quantity::new(10).unwrap()); // More than available
+        let decrease_result = inventory.decrease_stock(InventoryQuantity::new(10).unwrap()); // More than available
         assert!(decrease_result.is_err());
     }
 }

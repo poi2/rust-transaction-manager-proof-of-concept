@@ -3,6 +3,12 @@ use uuid::Uuid;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OrderId(Uuid);
 
+impl Default for OrderId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OrderId {
     pub fn new() -> Self {
         Self(Uuid::new_v4())
@@ -10,10 +16,6 @@ impl OrderId {
 
     pub fn uuid(&self) -> &Uuid {
         &self.0
-    }
-
-    pub fn to_string(&self) -> String {
-        self.0.to_string()
     }
 }
 
@@ -32,5 +34,19 @@ impl From<OrderId> for Uuid {
 impl std::fmt::Display for OrderId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_order_id_conversion() {
+        let uuid = Uuid::new_v4();
+        let order_id = OrderId::from(uuid);
+
+        assert_eq!(order_id.uuid(), &uuid);
+        assert_eq!(Uuid::from(order_id.clone()), uuid);
     }
 }

@@ -17,6 +17,6 @@ futures = "0.3"
 sea_orm_impl = { path = "crates/infrastructure/repository/sea_orm_impl" }
 sqlx = { version = "0.8.6", features = [ "postgres", "runtime-tokio", "tls-native-tls", "uuid" ] }
 sqlx_impl = { path = "crates/infrastructure/repository/sqlx_impl" }
-tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.47.1", features = ["rt-multi-thread", "macros", "sync"] }
 use_case = { path = "crates/use_case" }
 uuid = { version = "1.18.1", features = ["v4"] }

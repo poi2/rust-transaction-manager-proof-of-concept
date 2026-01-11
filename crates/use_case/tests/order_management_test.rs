@@ -3,8 +3,8 @@ mod order_management_integration_tests {
     use std::sync::Arc;
 
     use domain::{
-        db_context::DbContext, inventory::aggregate::Inventory, item::aggregate::ItemId,
-        order::aggregate::CreateOrderCommand, transaction_manager::TransactionManager,
+        db_context::DbContext, inventory::Inventory, item::ItemId, order::CreateOrderCommand,
+        transaction_manager::TransactionManager,
     };
     use tokio::sync::Mutex;
     use use_case::order_management::OrderManagementUseCase;
@@ -73,7 +73,7 @@ mod order_management_integration_tests {
         }
     }
 
-    impl domain::inventory::repository::InventoryRepository for StatefulMockInventoryRepository {
+    impl domain::inventory::InventoryRepository for StatefulMockInventoryRepository {
         type DbContext = StatefulMockDbContext;
         type Error = anyhow::Error;
 
@@ -130,23 +130,23 @@ mod order_management_integration_tests {
         }
     }
 
-    impl domain::order::repository::OrderRepository for StatefulMockOrderRepository {
+    impl domain::order::OrderRepository for StatefulMockOrderRepository {
         type DbContext = StatefulMockDbContext;
         type Error = anyhow::Error;
 
         async fn find_by_id(
             &self,
             _db_context: &Arc<Mutex<Self::DbContext>>,
-            _id: &domain::order::aggregate::OrderId,
-        ) -> Result<Option<domain::order::aggregate::Order>, Self::Error> {
+            _id: &domain::order::OrderId,
+        ) -> Result<Option<domain::order::Order>, Self::Error> {
             Ok(None)
         }
 
         async fn create(
             &self,
             _db_context: &Arc<Mutex<Self::DbContext>>,
-            order: domain::order::aggregate::Order,
-        ) -> Result<domain::order::aggregate::Order, Self::Error> {
+            order: domain::order::Order,
+        ) -> Result<domain::order::Order, Self::Error> {
             if self.should_fail_create {
                 return Err(anyhow::anyhow!("Order creation failed intentionally"));
             }
@@ -321,7 +321,7 @@ mod order_management_integration_tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("Quantity must be positive")
+                .contains("Order quantity must be positive")
         );
     }
 
@@ -346,7 +346,7 @@ mod order_management_integration_tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("Quantity must be positive")
+                .contains("Order quantity must be positive")
         );
     }
 }
