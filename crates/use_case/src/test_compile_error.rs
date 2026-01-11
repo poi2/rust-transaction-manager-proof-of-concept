@@ -58,7 +58,7 @@ where
     TM: TransactionManager + Send + Sync,
     TM::Error: From<anyhow::Error>
         + From<domain::inventory::aggregate::InventoryError>
-        + From<domain::order::aggregate::OrderError>
+        + From<domain::order::aggregate::QuantityError>
         + From<<<TM as TransactionManager>::DbContext as DbContext>::Error>,
     IR: InventoryRepository<DbContext = TM::DbContext, Error = TM::Error>,
     OR: OrderRepository<DbContext = TM::DbContext, Error = TM::Error>,

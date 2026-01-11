@@ -1,8 +1,9 @@
 #[cfg(test)]
 mod end_to_end_tests {
     use domain::{
-        inventory::aggregate::Inventory, item::aggregate::ItemId,
-        order::aggregate::CreateOrderCommand,
+        inventory::aggregate::Inventory,
+        item::aggregate::ItemId,
+        order::aggregate::{CreateOrderCommand, Quantity},
     };
 
     #[tokio::test]
@@ -127,7 +128,7 @@ mod end_to_end_tests {
 
         // Test insufficient inventory scenario simulation
         let mut inventory = Inventory::new(ItemId::new(), 5).unwrap();
-        let decrease_result = inventory.decrease_stock(10); // More than available
+        let decrease_result = inventory.decrease_stock(Quantity::new(10).unwrap()); // More than available
         assert!(decrease_result.is_err());
     }
 }

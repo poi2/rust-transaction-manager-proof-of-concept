@@ -173,7 +173,7 @@ mod order_management_integration_tests {
         let result = use_case.create_order(command).await;
         assert!(result.is_ok());
         let order = result.unwrap();
-        assert_eq!(order.quantity(), 3);
+        assert_eq!(order.quantity().value(), 3);
     }
 
     #[tokio::test]

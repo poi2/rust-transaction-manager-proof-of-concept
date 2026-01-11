@@ -2,6 +2,70 @@ use uuid::Uuid;
 
 use crate::item::aggregate::ItemId;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Quantity(u32);
+
+impl Quantity {
+    pub fn new(value: u32) -> Result<Self, QuantityError> {
+        if value == 0 {
+            return Err(QuantityError::Zero);
+        }
+        Ok(Self(value))
+    }
+
+    pub fn value(&self) -> u32 {
+        self.0
+    }
+}
+
+impl TryFrom<i32> for Quantity {
+    type Error = QuantityError;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        if value <= 0 {
+            return Err(QuantityError::NonPositive(value));
+        }
+        Ok(Self(value as u32))
+    }
+}
+
+impl From<Quantity> for i32 {
+    fn from(q: Quantity) -> Self {
+        q.0 as i32
+    }
+}
+
+impl From<Quantity> for u32 {
+    fn from(q: Quantity) -> Self {
+        q.0
+    }
+}
+
+impl std::fmt::Display for Quantity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QuantityError {
+    Zero,
+    NonPositive(i32),
+}
+
+impl std::fmt::Display for QuantityError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            QuantityError::Zero => write!(f, "Quantity must be positive"),
+            QuantityError::NonPositive(value) => {
+                write!(f, "Quantity must be positive: {value}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for QuantityError {}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OrderId(Uuid);
 
@@ -43,20 +107,16 @@ impl std::fmt::Display for OrderId {
 pub struct Order {
     id: OrderId,
     item_id: ItemId,
-    quantity: i32,
+    quantity: Quantity,
 }
 
 impl Order {
-    pub fn new(id: OrderId, item_id: ItemId, quantity: i32) -> Result<Self, OrderError> {
-        if quantity <= 0 {
-            return Err(OrderError::InvalidQuantity(quantity));
-        }
-
-        Ok(Self {
+    pub fn new(id: OrderId, item_id: ItemId, quantity: Quantity) -> Self {
+        Self {
             id,
             item_id,
             quantity,
-        })
+        }
     }
 
     pub fn id(&self) -> &OrderId {
@@ -67,7 +127,7 @@ impl Order {
         &self.item_id
     }
 
-    pub fn quantity(&self) -> i32 {
+    pub fn quantity(&self) -> Quantity {
         self.quantity
     }
 }
@@ -79,29 +139,13 @@ pub struct CreateOrderCommand {
 }
 
 impl TryFrom<CreateOrderCommand> for Order {
-    type Error = OrderError;
+    type Error = QuantityError;
 
     fn try_from(command: CreateOrderCommand) -> Result<Self, Self::Error> {
-        Self::new(OrderId::new(), command.item_id, command.quantity)
+        let quantity = Quantity::try_from(command.quantity)?;
+        Ok(Self::new(OrderId::new(), command.item_id, quantity))
     }
 }
-
-#[derive(Debug)]
-pub enum OrderError {
-    InvalidQuantity(i32),
-}
-
-impl std::fmt::Display for OrderError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            OrderError::InvalidQuantity(quantity) => {
-                write!(f, "Quantity must be positive: {quantity}")
-            }
-        }
-    }
-}
-
-impl std::error::Error for OrderError {}
 
 #[cfg(test)]
 mod tests {
@@ -111,37 +155,42 @@ mod tests {
     fn test_create_order_success() {
         let order_id = OrderId::new();
         let item_id = ItemId::new();
-        let order = Order::new(order_id.clone(), item_id.clone(), 5).unwrap();
+        let quantity = Quantity::new(5).unwrap();
+        let order = Order::new(order_id.clone(), item_id.clone(), quantity);
 
         assert_eq!(order.id(), &order_id);
         assert_eq!(order.item_id(), &item_id);
-        assert_eq!(order.quantity(), 5);
+        assert_eq!(order.quantity().value(), 5);
     }
 
     #[test]
-    fn test_create_order_zero_quantity() {
-        let order_id = OrderId::new();
-        let item_id = ItemId::new();
-        let result = Order::new(order_id, item_id, 0);
+    fn test_quantity_zero() {
+        let result = Quantity::new(0);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), QuantityError::Zero));
+    }
 
+    #[test]
+    fn test_quantity_from_i32_negative() {
+        let result = Quantity::try_from(-1);
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            OrderError::InvalidQuantity(0)
+            QuantityError::NonPositive(-1)
         ));
     }
 
     #[test]
-    fn test_create_order_negative_quantity() {
-        let order_id = OrderId::new();
-        let item_id = ItemId::new();
-        let result = Order::new(order_id, item_id, -1);
-
+    fn test_quantity_from_i32_zero() {
+        let result = Quantity::try_from(0);
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            OrderError::InvalidQuantity(-1)
-        ));
+        assert!(matches!(result.unwrap_err(), QuantityError::NonPositive(0)));
+    }
+
+    #[test]
+    fn test_quantity_from_i32_positive() {
+        let quantity = Quantity::try_from(5).unwrap();
+        assert_eq!(quantity.value(), 5);
     }
 
     #[test]
@@ -154,7 +203,7 @@ mod tests {
 
         let order = Order::try_from(command).unwrap();
         assert_eq!(order.item_id(), &item_id);
-        assert_eq!(order.quantity(), 3);
+        assert_eq!(order.quantity().value(), 3);
     }
 
     #[test]
@@ -169,7 +218,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
-            OrderError::InvalidQuantity(-1)
+            QuantityError::NonPositive(-1)
         ));
     }
 

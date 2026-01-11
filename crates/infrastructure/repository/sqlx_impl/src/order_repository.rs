@@ -38,7 +38,8 @@ impl OrderRepository for SqlxOrderRepository {
                 let id: uuid::Uuid = row.try_get("id")?;
                 let item_id: uuid::Uuid = row.try_get("item_id")?;
                 let quantity: i32 = row.try_get("quantity")?;
-                let order = Order::new(id.into(), item_id.into(), quantity)?;
+                let quantity = quantity.try_into()?;
+                let order = Order::new(id.into(), item_id.into(), quantity);
                 Ok(Some(order))
             }
             None => Ok(None),
@@ -56,7 +57,7 @@ impl OrderRepository for SqlxOrderRepository {
         sqlx::query("INSERT INTO poc_for_sqlx.orders (id, item_id, quantity) VALUES ($1, $2, $3)")
             .bind(order.id().uuid())
             .bind(order.item_id().uuid())
-            .bind(order.quantity())
+            .bind(i32::from(order.quantity()))
             .execute(&mut **txn)
             .await?;
 

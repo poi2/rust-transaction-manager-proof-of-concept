@@ -50,7 +50,8 @@ impl OrderRepository for SeaOrmOrderRepository {
 
         match result {
             Some(model) => {
-                let order = Order::new(model.id.into(), model.item_id.into(), model.quantity)?;
+                let quantity = model.quantity.try_into()?;
+                let order = Order::new(model.id.into(), model.item_id.into(), quantity);
                 Ok(Some(order))
             }
             None => Ok(None),
@@ -68,7 +69,7 @@ impl OrderRepository for SeaOrmOrderRepository {
         let active_model = ActiveModel {
             id: Set(*order.id().uuid()),
             item_id: Set(*order.item_id().uuid()),
-            quantity: Set(order.quantity()),
+            quantity: Set(i32::from(order.quantity())),
         };
 
         active_model.insert(txn).await?;

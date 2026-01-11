@@ -1,4 +1,4 @@
-use crate::item::aggregate::ItemId;
+use crate::{item::aggregate::ItemId, order::aggregate::Quantity};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Inventory {
@@ -23,19 +23,17 @@ impl Inventory {
         self.quantity
     }
 
-    pub fn decrease_stock(&mut self, amount: i32) -> Result<(), InventoryError> {
-        if amount < 0 {
-            return Err(InventoryError::NegativeAmount(amount));
-        }
+    pub fn decrease_stock(&mut self, amount: Quantity) -> Result<(), InventoryError> {
+        let amount_i32 = i32::from(amount);
 
-        if self.quantity < amount {
+        if self.quantity < amount_i32 {
             return Err(InventoryError::InsufficientStock {
                 available: self.quantity,
-                requested: amount,
+                requested: amount_i32,
             });
         }
 
-        self.quantity -= amount;
+        self.quantity -= amount_i32;
         Ok(())
     }
 
@@ -110,7 +108,8 @@ mod tests {
         let item_id = ItemId::new();
         let mut inventory = Inventory::new(item_id, 10).unwrap();
 
-        inventory.decrease_stock(3).unwrap();
+        let quantity = Quantity::new(3).unwrap();
+        inventory.decrease_stock(quantity).unwrap();
         assert_eq!(inventory.quantity(), 7);
     }
 
@@ -119,7 +118,8 @@ mod tests {
         let item_id = ItemId::new();
         let mut inventory = Inventory::new(item_id, 5).unwrap();
 
-        let result = inventory.decrease_stock(10);
+        let quantity = Quantity::new(10).unwrap();
+        let result = inventory.decrease_stock(quantity);
         assert!(result.is_err());
         assert!(matches!(
             result.unwrap_err(),
@@ -127,19 +127,6 @@ mod tests {
                 available: 5,
                 requested: 10
             }
-        ));
-    }
-
-    #[test]
-    fn test_decrease_stock_negative_amount() {
-        let item_id = ItemId::new();
-        let mut inventory = Inventory::new(item_id, 10).unwrap();
-
-        let result = inventory.decrease_stock(-1);
-        assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            InventoryError::NegativeAmount(-1)
         ));
     }
 

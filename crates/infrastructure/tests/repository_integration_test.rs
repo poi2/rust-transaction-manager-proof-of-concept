@@ -6,7 +6,7 @@ mod repository_integration_tests {
         inventory::{aggregate::Inventory, repository::InventoryRepository},
         item::aggregate::ItemId,
         order::{
-            aggregate::{Order, OrderId},
+            aggregate::{Order, OrderId, Quantity},
             repository::OrderRepository,
         },
         transaction_manager::TransactionManager,
@@ -59,7 +59,9 @@ mod repository_integration_tests {
 
                         // Update
                         let mut updated_inventory = found.unwrap();
-                        updated_inventory.decrease_stock(30).unwrap();
+                        updated_inventory
+                            .decrease_stock(Quantity::new(30).unwrap())
+                            .unwrap();
                         let updated = repo.update(&db_context, updated_inventory).await?;
                         assert_eq!(updated.quantity(), 70);
 
@@ -84,7 +86,7 @@ mod repository_integration_tests {
             let repo = Arc::new(SeaOrmOrderRepository);
             let order_id = OrderId::new();
             let item_id = ItemId::new();
-            let order = Order::new(order_id.clone(), item_id, 5).unwrap();
+            let order = Order::new(order_id.clone(), item_id, Quantity::new(5).unwrap());
 
             let result = transaction_manager
                 .transaction(|db_context| {
@@ -97,7 +99,7 @@ mod repository_integration_tests {
                         // Read
                         let found = repo.find_by_id(&db_context, &order_id).await?;
                         assert!(found.is_some());
-                        assert_eq!(found.as_ref().unwrap().quantity(), 5);
+                        assert_eq!(found.as_ref().unwrap().quantity().value(), 5);
 
                         Ok(created)
                     }
@@ -165,7 +167,7 @@ mod repository_integration_tests {
             let repo = Arc::new(SqlxOrderRepository);
             let order_id = OrderId::new();
             let item_id = ItemId::new();
-            let order = Order::new(order_id.clone(), item_id, 3).unwrap();
+            let order = Order::new(order_id.clone(), item_id, Quantity::new(3).unwrap());
 
             let result = transaction_manager
                 .transaction(|db_context| {
@@ -178,7 +180,7 @@ mod repository_integration_tests {
                         // Read
                         let found = repo.find_by_id(&db_context, &order_id).await?;
                         assert!(found.is_some());
-                        assert_eq!(found.as_ref().unwrap().quantity(), 3);
+                        assert_eq!(found.as_ref().unwrap().quantity().value(), 3);
 
                         Ok(created)
                     }
@@ -198,8 +200,12 @@ mod repository_integration_tests {
         let mut inventory2 = Inventory::new(item_id, 100).unwrap();
 
         // Both should behave identically
-        inventory1.decrease_stock(30).unwrap();
-        inventory2.decrease_stock(30).unwrap();
+        inventory1
+            .decrease_stock(Quantity::new(30).unwrap())
+            .unwrap();
+        inventory2
+            .decrease_stock(Quantity::new(30).unwrap())
+            .unwrap();
 
         assert_eq!(inventory1.quantity(), inventory2.quantity());
         assert_eq!(inventory1.quantity(), 70);
