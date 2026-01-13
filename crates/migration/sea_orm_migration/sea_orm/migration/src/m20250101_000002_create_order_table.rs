@@ -11,12 +11,7 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table((Alias::new("poc_for_sea_orm"), Order::Table))
                     .if_not_exists()
-                    .col(
-                        ColumnDef::new(Order::Id)
-                            .uuid()
-                            .not_null()
-                            .primary_key(),
-                    )
+                    .col(ColumnDef::new(Order::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Order::ItemId).uuid().not_null())
                     .col(ColumnDef::new(Order::Quantity).integer().not_null())
                     .to_owned(),
