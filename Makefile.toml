@@ -154,7 +154,7 @@ args = ["sort", "--workspace", "--grouped"]
 [tasks.udeps]
 description = "Check for unused dependencies"
 command = "rustup"
-args = ["run", "nightly", "cargo", "udeps", "--all-targets"]
+args = ["run", "nightly-2025-01-01", "cargo", "udeps", "--all-targets"]
 
 [tasks.install-tarpaulin]
 description = "Install cargo-tarpaulin"
