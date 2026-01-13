@@ -27,7 +27,7 @@ Rustにおけるトランザクション管理パターンの実装例と、ク�
 
 ### 前提条件
 
-- Rust 1.88.0+
+- Rust 1.92.0+
 - PostgreSQL
 - Docker & Docker Compose
 

@@ -27,7 +27,7 @@ Detailed documentation is available in the [`docs/`](docs/) directory:
 
 ### Prerequisites
 
-- Rust 1.88.0+
+- Rust 1.92.0+
 - PostgreSQL
 - Docker & Docker Compose
 
