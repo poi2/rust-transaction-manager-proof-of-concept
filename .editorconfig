@@ -8,7 +8,7 @@ end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
 
-[*.{rs,toml,md,yml,yaml,sh,sql}]
+[*.{rs,toml,md,yml,yaml,sh,sql,env,envrc}]
 indent_style = space
 indent_size = 4
 
