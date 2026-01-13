@@ -1,4 +1,5 @@
 pub mod db_context;
+pub mod entities;
 pub mod inventory_repository;
 pub mod order_repository;
 pub mod transaction_manager;

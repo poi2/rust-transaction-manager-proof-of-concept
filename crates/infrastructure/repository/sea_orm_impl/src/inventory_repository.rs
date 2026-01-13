@@ -5,25 +5,11 @@ use domain::{
     inventory::{Inventory, InventoryRepository},
     item::ItemId,
 };
-// SeaORM entity definitions (would typically be in a separate entities module)
-use sea_orm::entity::prelude::*;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, Set};
 use tokio::sync::Mutex;
 
 use crate::db_context::SeaOrmDbContext;
-
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(schema_name = "poc_for_sea_orm", table_name = "inventory")]
-pub struct Model {
-    #[sea_orm(primary_key)]
-    pub item_id: Uuid,
-    pub quantity: i32,
-}
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
-
-impl ActiveModelBehavior for ActiveModel {}
+use crate::entities::inventory::{ActiveModel, Column, Entity};
 
 #[derive(Clone)]
 pub struct SeaOrmInventoryRepository;

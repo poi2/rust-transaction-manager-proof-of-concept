@@ -4,26 +4,11 @@ use domain::{
     db_context::DbContext,
     order::{Order, OrderId, OrderRepository},
 };
-// SeaORM entity definitions
-use sea_orm::entity::prelude::*;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use tokio::sync::Mutex;
 
 use crate::db_context::SeaOrmDbContext;
-
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(schema_name = "poc_for_sea_orm", table_name = "orders")]
-pub struct Model {
-    #[sea_orm(primary_key)]
-    pub id: Uuid,
-    pub item_id: Uuid,
-    pub quantity: i32,
-}
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
-
-impl ActiveModelBehavior for ActiveModel {}
+use crate::entities::orders::{ActiveModel, Column, Entity};
 
 #[derive(Clone)]
 pub struct SeaOrmOrderRepository;
