@@ -128,8 +128,8 @@ dependencies = ["db-setup"]
 # コード品質
 [tasks.fmt]
 description = "Format code with nightly rustfmt (for advanced import grouping)"
-command = "bash"
-args = ["-c", "cargo +nightly fmt"]
+command = "rustup"
+args = ["run", "nightly", "cargo", "fmt"]
 
 [tasks.clippy]
 description = "Run clippy linter"
@@ -153,8 +153,8 @@ args = ["sort", "--workspace", "--grouped"]
 
 [tasks.udeps]
 description = "Check for unused dependencies"
-command = "bash"
-args = ["-c", "cargo +nightly udeps --all-targets"]
+command = "rustup"
+args = ["run", "nightly", "cargo", "udeps", "--all-targets"]
 
 [tasks.install-tarpaulin]
 description = "Install cargo-tarpaulin"
