@@ -93,7 +93,12 @@ cargo make udeps
 
 ## ライセンス
 
-MIT
+以下のいずれかのライセンスの下でライセンスされています
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) または http://www.apache.org/licenses/LICENSE-2.0)
+- MIT ライセンス ([LICENSE-MIT](LICENSE-MIT) または http://opensource.org/licenses/MIT)
+
+お好きな方をお選びください。
 
 ## 参考資料
 
