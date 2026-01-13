@@ -14,6 +14,7 @@ anyhow = { version = "1.0.100", features = ["std"] }
 async-trait = "0.1"
 domain = { path = "crates/domain" }
 futures = "0.3"
+sea-orm = { version = "1.1.1", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
 sea_orm_impl = { path = "crates/infrastructure/repository/sea_orm_impl" }
 sqlx = { version = "0.8.6", features = [ "postgres", "runtime-tokio", "tls-native-tls", "uuid" ] }
 sqlx_impl = { path = "crates/infrastructure/repository/sqlx_impl" }
