@@ -1,36 +1,56 @@
 //! # SqlX Transaction Manager Implementation
-//! # 所有権ベースSqlXトランザクションマネージャー実装
 //!
-//! This is the most advanced implementation that fundamentally redesigns transaction
-//! management using ownership patterns instead of shared mutable state.
+//! Transaction management implementation using ownership patterns with minimal unsafe code.
 //!
-//! これは共有可変状態の代わりに所有権パターンを使用してトランザクション管理を
-//! 根本的に再設計した最も先進的な実装です。
-//!
-//! ## Design Philosophy | 設計哲学
+//! ## Design Philosophy
 //!
 //! Instead of fighting with lifetimes through unsafe transmutation, this approach
 //! redesigns the transaction management to work with ownership from the ground up.
 //!
-//! unsafeな変換でライフタイムと戦うのではなく、このアプローチは
-//! ゼロから所有権で動作するようにトランザクション管理を再設計します。
+//! ## Key Architectural Changes
 //!
-//! ## Key Architectural Changes | 主要なアーキテクチャ変更:
+//! ### 1. Ownership-based Transaction Handling
+//! - Transactions are owned rather than borrowed
+//! - Temporary Arc<Mutex<T>> for compatibility, reclaimed via try_unwrap
+//! - Functional composition over imperative mutation
 //!
-//! ### 1. Ownership-based Transaction Handling | 所有権ベースのトランザクション処理
-//! - Transactions are owned rather than borrowed / トランザクションは借用ではなく所有
-//! - No shared mutable state via Arc<Mutex<T>> / Arc<Mutex<T>>による共有可変状態なし
-//! - Functional composition over imperative mutation / 命令的変更より関数合成
+//! ### 2. Consuming Operations
+//! - commit() and rollback() consume self
+//! - Prevents accidental reuse after transaction end
+//! - Compile-time enforcement of transaction lifecycle
 //!
-//! ### 2. Consuming Operations | 消費型操作
-//! - commit() and rollback() consume self / commit()とrollback()はselfを消費
-//! - Prevents accidental reuse after transaction end / トランザクション終了後の誤った再利用を防止
-//! - Compile-time enforcement of transaction lifecycle / トランザクションライフサイクルのコンパイル時強制
+//! ### 3. Reduced Unsafe Surface Area
+//! - Unsafe code limited to initial setup
+//! - Clear ownership boundaries
+//! - Predictable memory management
 //!
-//! ### 3. Reduced Unsafe Surface Area | Unsafeな範囲の削減
-//! - Unsafe code limited to initial setup / Unsafeコードは初期設定に限定
-//! - Clear ownership boundaries / 明確な所有権境界
-//! - Predictable memory management / 予測可能なメモリ管理
+//! ---
+//!
+//! # 所有権ベースSqlXトランザクションマネージャー実装
+//!
+//! 最小限のunsafeコードで所有権パターンを使用したトランザクション管理の実装です。
+//!
+//! ## 設計哲学
+//!
+//! unsafeな変換でライフタイムと戦うのではなく、ゼロから所有権で動作するように
+//! トランザクション管理を再設計します。
+//!
+//! ## 主要なアーキテクチャ変更
+//!
+//! ### 1. 所有権ベースのトランザクション処理
+//! - トランザクションは借用ではなく所有
+//! - 互換性のため一時的にArc<Mutex<T>>を使用、try_unwrapで所有権を取り戻す
+//! - 命令的変更より関数合成
+//!
+//! ### 2. 消費型操作
+//! - commit()とrollback()はselfを消費
+//! - トランザクション終了後の誤った再利用を防止
+//! - トランザクションライフサイクルのコンパイル時強制
+//!
+//! ### 3. Unsafeな範囲の削減
+//! - Unsafeコードは初期設定に限定
+//! - 明確な所有権境界
+//! - 予測可能なメモリ管理
 
 use std::{future::Future, sync::Arc};
 
@@ -40,29 +60,41 @@ use tokio::sync::Mutex;
 
 use crate::SqlxDbContext;
 
-/// transaction approach - eliminates unsafe code through architectural redesign
-/// This implementation takes ownership of transactions instead of borrowing
+/// Ownership-based transaction manager implementation.
+/// This implementation takes ownership of transactions instead of borrowing.
 ///
-/// オーナーシップトランザクションアプローチ - アーキテクチャ再設計によるunsafeコード排除
-/// この実装は借用の代わりにトランザクションの所有権を取得します
+/// ## Key Design Points
 ///
-/// ## Key Differences from Arc<Mutex> Pattern | Arc<Mutex>パターンとの主要な違い:
-/// 1. **No shared mutable state** - Each transaction owns its resources
-///    **共有可変状態なし** - 各トランザクションが独自のリソースを所有
+/// 1. **Temporary shared state, reclaimed ownership** - Arc<Mutex<T>> used temporarily,
+///    ownership reclaimed via Arc::try_unwrap
 /// 2. **Minimal unsafe transmutation** - Only at initialization
-///    **最小限のunsafe変換** - 初期化時のみ
-/// 3. **Functional composition** - Transactions are composed rather than shared
-///    **関数合成** - トランザクションは共有ではなく合成される
-/// 4. **Consuming operations** - commit/rollback take ownership
-///    **消費型操作** - commit/rollbackは所有権を取得
+/// 3. **Consuming operations** - commit/rollback take ownership after reclaiming from Arc
+/// 4. **No long-lived shared mutable state** - Arc is unwrapped before transaction completion
 ///
-/// ## Architecture Changes Required | 必要なアーキテクチャ変更:
+/// ## Architecture
+///
 /// - DbContext owns the transaction rather than borrowing it
-///   DbContextは借用ではなくトランザクションを所有する
 /// - Repository methods work with owned transactions (via Arc<Mutex> for compatibility)
-///   リポジトリメソッドは所有されたトランザクションで動作（互換性のためArc<Mutex>経由）
 /// - Transaction lifetime is explicitly managed through ownership
-///   トランザクションライフタイムは所有権を通じて明示的に管理される
+///
+/// ---
+///
+/// オーナーシップベースのトランザクションマネージャー実装。
+/// この実装は借用の代わりにトランザクションの所有権を取得します。
+///
+/// ## 主要な設計ポイント
+///
+/// 1. **一時的な共有状態、所有権の回収** - Arc<Mutex<T>>を一時的に使用、
+///    Arc::try_unwrapで所有権を回収
+/// 2. **最小限のunsafe変換** - 初期化時のみ
+/// 3. **消費型操作** - commit/rollbackはArcから回収後に所有権を取得
+/// 4. **長期的な共有可変状態なし** - トランザクション完了前にArcをアンラップ
+///
+/// ## アーキテクチャ
+///
+/// - DbContextは借用ではなくトランザクションを所有する
+/// - リポジトリメソッドは所有されたトランザクションで動作（互換性のためArc<Mutex>経由）
+/// - トランザクションライフタイムは所有権を通じて明示的に管理される
 pub struct SqlxTransactionManager {
     pool: PgPool,
 }
@@ -90,6 +122,7 @@ impl TransactionManager for SqlxTransactionManager {
 
             // Cast transaction to 'static lifetime
             // This is the only unsafe operation, contained at initialization
+            //
             // トランザクションを'staticライフタイムにキャスト
             // これが唯一のunsafe操作で、初期化時に封じ込められている
             let tx_static = unsafe {
@@ -105,6 +138,7 @@ impl TransactionManager for SqlxTransactionManager {
             match f(db_context.clone()).await {
                 Ok(result) => {
                     // Extract the context from Arc<Mutex<T>> to commit
+                    //
                     // Arc<Mutex<T>>からコンテキストを抽出してコミット
                     match Arc::try_unwrap(db_context) {
                         Ok(mutex) => {
@@ -114,6 +148,7 @@ impl TransactionManager for SqlxTransactionManager {
                         }
                         Err(_) => {
                             // Fallback error if Arc::try_unwrap fails (shouldn't happen in normal use)
+                            //
                             // Arc::try_unwrapが失敗した場合のフォールバックエラー（通常使用では発生しないはず）
                             Err(anyhow::anyhow!("Failed to extract context for commit"))
                         }
@@ -121,6 +156,7 @@ impl TransactionManager for SqlxTransactionManager {
                 }
                 Err(e) => {
                     // Extract the context from Arc<Mutex<T>> to rollback
+                    //
                     // Arc<Mutex<T>>からコンテキストを抽出してロールバック
                     match Arc::try_unwrap(db_context) {
                         Ok(mutex) => {
@@ -129,6 +165,7 @@ impl TransactionManager for SqlxTransactionManager {
                         }
                         Err(_) => {
                             // Ignore rollback failure in error case
+                            //
                             // エラーケースではロールバック失敗を無視
                         }
                     }
