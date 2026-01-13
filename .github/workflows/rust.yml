@@ -1,0 +1,149 @@
+name: "Rust"
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  schedule:
+    - cron: "0 0 * * 0"
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust || github.event_name == 'schedule' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name != 'schedule'
+        with:
+          filters: |
+            rust:
+              - 'crates/**'
+              - 'benches/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'Makefile.toml'
+              - 'rust-toolchain.toml'
+              - 'rustfmt.toml'
+              - '.github/workflows/rust.yml'
+      - name: Force run on schedule
+        if: github.event_name == 'schedule'
+        run: echo "rust=true" >> $GITHUB_OUTPUT
+
+  check-all:
+    name: Code quality checks
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: rustfmt
+
+      - name: Install cargo-make
+        run: cargo install --locked cargo-make
+
+      - name: Install cargo-sort
+        run: cargo install cargo-sort
+
+      - name: Install cargo-udeps
+        run: cargo install cargo-udeps --locked
+
+      - name: Run cargo make check-all
+        run: cargo make check-all
+
+  test-all:
+    name: Test on ${{ matrix.os }}
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: poc_transaction_manager
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:password@localhost:5432/poc_transaction_manager
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install PostgreSQL client (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Install PostgreSQL client (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install postgresql@15
+          echo "/opt/homebrew/opt/postgresql@15/bin" >> $GITHUB_PATH
+
+      - name: Install cargo-make
+        run: cargo install --locked cargo-make
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - name: Setup database schemas (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          psql $DATABASE_URL -c "CREATE SCHEMA IF NOT EXISTS poc_for_sea_orm;"
+          psql $DATABASE_URL -c "CREATE SCHEMA IF NOT EXISTS poc_for_sqlx;"
+
+      - name: Run cargo make test-all (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: cargo make test-all
+
+      - name: Run unit tests only (Windows)
+        if: runner.os == 'Windows'
+        run: cargo make test-unit
+
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [changes, check-all, test-all]
+    if: always()
+    steps:
+      - name: Check all jobs status
+        run: |
+          if [[ "${{ needs.changes.result }}" == "failure" ||
+                "${{ needs.check-all.result }}" == "failure" ||
+                "${{ needs.test-all.result }}" == "failure" ]]; then
+            echo "One or more jobs failed"
+            exit 1
+          else
+            echo "All jobs passed or were skipped"
+          fi
