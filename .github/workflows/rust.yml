@@ -46,9 +46,11 @@ jobs:
           toolchain: stable
           components: rustfmt, clippy
 
+      # Use a specific nightly version due to compiler bugs in latest nightly
+      # See: https://github.com/rust-lang/rust/issues (sea-query compilation failure)
       - uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2025-01-01
           components: rustfmt
 
       - name: Cache cargo tools
