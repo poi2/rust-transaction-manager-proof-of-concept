@@ -1,98 +1,100 @@
 # Rust Transaction Manager - Proof of Concept
 
-Rustにおけるトランザクション管理パターンの実装例と、クリーンアーキテクチャを適用したサンプルプロジェクト。
+[日本語版 README はこちら / Japanese README](README.ja.md)
 
-## 概要
+A proof-of-concept implementation exploring transaction management patterns in Rust, applying Clean Architecture with portable implementations for both SeaORM and sqlx.
 
-このプロジェクトは、Rustの型システムと所有権を活用した安全なトランザクション管理パターンを探求し、SeaORMとsqlxの両方で動作するポータブルな実装を提供します。
+## Overview
 
-### 主な特徴
+This project explores safe transaction management patterns leveraging Rust's type system and ownership, providing portable implementations that work with both SeaORM and sqlx ORMs.
 
-- 🔒 **型安全なトランザクション管理**: `Arc<Mutex<DbContext>>` パターンによる安全な並行制御
-- 🏗️ **クリーンアーキテクチャ**: ドメイン駆動設計（DDD）に基づいた階層構造
-- 🔄 **ORM非依存**: SeaORMとsqlxの両方をサポート
-- ✅ **包括的なテスト**: ユニット、統合、E2Eテストを網羅
+### Key Features
 
-## ドキュメント
+- 🔒 **Type-safe Transaction Management**: Safe concurrency control using the `Arc<Mutex<DbContext>>` pattern
+- 🏗️ **Clean Architecture**: Layered architecture based on Domain-Driven Design (DDD)
+- 🔄 **ORM-Agnostic**: Supports both SeaORM and sqlx
+- ✅ **Comprehensive Testing**: Coverage across unit, integration, and E2E tests
 
-詳細なドキュメントは [`docs/`](docs/) ディレクトリにあります：
+## Documentation
 
-- **[docs/README.md](docs/README.md)** - ドキュメント目次
-- **[docs/architecture/transaction-manager-design.md](docs/architecture/transaction-manager-design.md)** - トランザクションマネージャーの設計思想
-- **[docs/architecture/DESIGN.md](docs/architecture/DESIGN.md)** - アーキテクチャ設計
+Detailed documentation is available in the [`docs/`](docs/) directory:
 
-## クイックスタート
+- **[docs/README.md](docs/README.md)** - Documentation index
+- **[docs/architecture/transaction-manager-design.md](docs/architecture/transaction-manager-design.md)** - Transaction manager design philosophy
+- **[docs/architecture/DESIGN.md](docs/architecture/DESIGN.md)** - Architecture design
 
-### 前提条件
+## Quick Start
+
+### Prerequisites
 
 - Rust 1.88.0+
 - PostgreSQL
 - Docker & Docker Compose
 
-### セットアップ
+### Setup
 
 ```bash
-# データベース起動
+# Start database
 cargo make docker-up
 
-# データベースセットアップ
+# Setup database
 cargo make db-setup
 
-# テスト実行
+# Run tests
 cargo make test
 
-# アプリケーション実行（SeaORM版）
+# Run application (SeaORM)
 cargo make run-sea-orm
 
-# アプリケーション実行（sqlx版）
+# Run application (sqlx)
 cargo make run-sqlx
 ```
 
-## プロジェクト構成
+## Project Structure
 
 ```
 crates/
-├── domain/              # ドメイン層（エンティティ、値オブジェクト、リポジトリインターフェース）
-├── use_case/            # ユースケース層（ビジネスロジック）
-├── infrastructure/      # インフラ層（リポジトリ実装）
+├── domain/              # Domain layer (entities, value objects, repository interfaces)
+├── use_case/            # Use case layer (business logic)
+├── infrastructure/      # Infrastructure layer (repository implementations)
 │   └── repository/
 │       ├── sea_orm_impl/
 │       └── sqlx_impl/
-└── application/         # アプリケーション層（DI、エントリーポイント）
+└── application/         # Application layer (DI, entry points)
 ```
 
-## 開発
+## Development
 
-### テスト
+### Testing
 
 ```bash
-# 単体テスト
+# Unit tests
 cargo make test-unit
 
-# 統合テスト（DB必要）
+# Integration tests (requires DB)
 cargo make test-all
 
-# コード品質チェック
+# Code quality checks
 cargo make check-all
 ```
 
-### コード品質
+### Code Quality
 
 ```bash
-# フォーマット
+# Format
 cargo make fmt
 
 # Clippy
 cargo make clippy
 
-# 未使用依存関係チェック
+# Check for unused dependencies
 cargo make udeps
 ```
 
-## ライセンス
+## License
 
 MIT
 
-## 参考資料
+## References
 
-- [Transaction Manager Design Evolution](docs/archive/transaction-manager-design-v1.md) - パターンの進化過程
+- [Transaction Manager Design Evolution](docs/archive/transaction-manager-design-v1.md) - Evolution of the pattern
