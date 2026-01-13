@@ -7,8 +7,10 @@ use domain::{
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 use tokio::sync::Mutex;
 
-use crate::db_context::SeaOrmDbContext;
-use crate::entities::orders::{ActiveModel, Column, Entity};
+use crate::{
+    db_context::SeaOrmDbContext,
+    entities::orders::{ActiveModel, Column, Entity},
+};
 
 #[derive(Clone)]
 pub struct SeaOrmOrderRepository;
