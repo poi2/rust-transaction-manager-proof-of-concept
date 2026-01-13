@@ -51,14 +51,22 @@ jobs:
           toolchain: nightly
           components: rustfmt
 
+      - name: Cache cargo tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-tools-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-tools-
+
       - name: Install cargo-make
-        run: cargo install --locked cargo-make
+        run: cargo install --locked cargo-make || true
 
       - name: Install cargo-sort
-        run: cargo install cargo-sort
+        run: cargo install cargo-sort || true
 
       - name: Install cargo-udeps
-        run: cargo install cargo-udeps --locked
+        run: cargo install cargo-udeps --locked || true
 
       - name: Run cargo make check-all
         run: cargo make check-all
