@@ -128,8 +128,10 @@ dependencies = ["db-setup"]
 # コード品質
 [tasks.fmt]
 description = "Format code with nightly rustfmt (for advanced import grouping)"
+# NOTE: Use a specific nightly version due to compiler bugs in latest nightly
+# See: https://github.com/rust-lang/rust/issues (sea-query compilation failure)
 command = "rustup"
-args = ["run", "nightly", "cargo", "fmt"]
+args = ["run", "nightly-2025-01-01", "cargo", "fmt"]
 
 [tasks.clippy]
 description = "Run clippy linter"
@@ -153,6 +155,8 @@ args = ["sort", "--workspace", "--grouped"]
 
 [tasks.udeps]
 description = "Check for unused dependencies"
+# NOTE: Use a specific nightly version due to compiler bugs in latest nightly
+# See: https://github.com/rust-lang/rust/issues (sea-query compilation failure)
 command = "rustup"
 args = ["run", "nightly-2025-01-01", "cargo", "udeps", "--all-targets"]
 
