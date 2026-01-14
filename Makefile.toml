@@ -4,6 +4,9 @@ default_to_workspace = false
 [env]
 DATABASE_URL = "postgres://postgres:password@localhost:5432/poc_transaction_manager"
 RUST_LOG = "debug"
+CARGO_MAKE_VERSION = "0.37.29"
+CARGO_SORT_VERSION = "1.0.9"
+CARGO_UDEPS_VERSION = "0.1.53"
 
 # Docker 管理
 [tasks.docker-up]

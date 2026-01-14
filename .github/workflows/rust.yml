@@ -57,18 +57,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin
-          key: ${{ runner.os }}-cargo-tools-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-tools-${{ hashFiles('Makefile.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-tools-
 
-      - name: Install cargo-make
-        run: cargo install --locked cargo-make || true
-
-      - name: Install cargo-sort
-        run: cargo install cargo-sort || true
-
-      - name: Install cargo-udeps
-        run: cargo install cargo-udeps --locked || true
+      - name: Install cargo tools
+        run: |
+          eval $(cargo make --print-env-vars)
+          cargo install --locked cargo-make --version ${CARGO_MAKE_VERSION} || true
+          cargo install cargo-sort --version ${CARGO_SORT_VERSION} || true
+          cargo install cargo-udeps --locked --version ${CARGO_UDEPS_VERSION} || true
 
       - name: Run cargo make check-all
         run: cargo make check-all
