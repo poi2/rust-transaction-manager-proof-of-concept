@@ -1,0 +1,22 @@
+[package]
+name = "application"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "sea_orm_app"
+path = "src/bin/sea_orm_app.rs"
+
+[[bin]]
+name = "sqlx_app"
+path = "src/bin/sqlx_app.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+domain = { workspace = true }
+sea_orm_impl = { workspace = true }
+sqlx = { workspace = true }
+sqlx_impl = { workspace = true }
+tokio = { workspace = true }
+use_case = { workspace = true }
+uuid = { workspace = true }

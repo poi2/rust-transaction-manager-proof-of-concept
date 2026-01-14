@@ -1,0 +1,205 @@
+name: "Rust"
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  schedule:
+    - cron: "0 0 * * 0"
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust || github.event_name == 'schedule' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name != 'schedule'
+        with:
+          filters: |
+            rust:
+              - 'crates/**'
+              - 'benches/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'Makefile.toml'
+              - 'rust-toolchain.toml'
+              - 'rustfmt.toml'
+              - '.github/workflows/rust.yml'
+      - name: Force run on schedule
+        if: github.event_name == 'schedule'
+        run: echo "rust=true" >> $GITHUB_OUTPUT
+
+  check-all:
+    name: Code quality checks
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      # Use a specific nightly version due to compiler bugs in latest nightly
+      # See: https://github.com/rust-lang/rust/issues (sea-query compilation failure)
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly-2025-01-01
+          components: rustfmt
+
+      - name: Cache cargo tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-tools-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-tools-
+
+      - name: Install cargo-make
+        run: cargo install --locked cargo-make || true
+
+      - name: Install cargo-sort
+        run: cargo install cargo-sort || true
+
+      - name: Install cargo-udeps
+        run: cargo install cargo-udeps --locked || true
+
+      - name: Run cargo make check-all
+        run: cargo make check-all
+
+  test-linux:
+    name: Test on Linux (with DB)
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: poc_transaction_manager
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:password@localhost:5432/poc_transaction_manager
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - name: Run database migrations
+        run: |
+          psql $DATABASE_URL -c "CREATE SCHEMA IF NOT EXISTS poc_for_sea_orm;"
+          psql $DATABASE_URL -c "CREATE SCHEMA IF NOT EXISTS poc_for_sqlx;"
+          psql $DATABASE_URL -c "
+          CREATE TABLE IF NOT EXISTS poc_for_sqlx.inventory (
+              item_id UUID PRIMARY KEY,
+              quantity INTEGER NOT NULL
+          );
+          CREATE TABLE IF NOT EXISTS poc_for_sqlx.orders (
+              id UUID PRIMARY KEY,
+              item_id UUID NOT NULL,
+              quantity INTEGER NOT NULL
+          );
+          CREATE TABLE IF NOT EXISTS poc_for_sea_orm.inventory (
+              item_id UUID PRIMARY KEY,
+              quantity INTEGER NOT NULL
+          );
+          CREATE TABLE IF NOT EXISTS poc_for_sea_orm.orders (
+              id UUID PRIMARY KEY,
+              item_id UUID NOT NULL,
+              quantity INTEGER NOT NULL
+          );
+          "
+
+      - name: Run all tests including DB tests
+        run: cargo nextest run --run-ignored all
+
+  test-macos:
+    name: Test on macOS (unit tests only)
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - name: Run unit tests only
+        run: cargo nextest run
+
+  test-windows:
+    name: Test on Windows (unit tests only)
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - name: Run unit tests only
+        run: cargo nextest run
+
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [changes, check-all, test-linux, test-macos, test-windows]
+    if: always()
+    steps:
+      - name: Check all jobs status
+        run: |
+          if [[ "${{ needs.changes.result }}" == "failure" ||
+                "${{ needs.check-all.result }}" == "failure" ||
+                "${{ needs.test-linux.result }}" == "failure" ||
+                "${{ needs.test-macos.result }}" == "failure" ||
+                "${{ needs.test-windows.result }}" == "failure" ]]; then
+            echo "One or more jobs failed"
+            exit 1
+          else
+            echo "All jobs passed or were skipped"
+          fi

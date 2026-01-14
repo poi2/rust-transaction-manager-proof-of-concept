@@ -1,0 +1,21 @@
+[package]
+name = "infrastructure"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["sea-orm-impl", "sqlx-impl"]
+sea-orm-impl = ["sea_orm_impl"]
+sqlx-impl = ["sqlx_impl"]
+
+[dependencies]
+anyhow = { workspace = true }
+domain = { workspace = true }
+sea_orm_impl = { workspace = true, optional = true }
+sqlx_impl = { workspace = true, optional = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+sea-orm = { workspace = true }
+sqlx = { workspace = true }

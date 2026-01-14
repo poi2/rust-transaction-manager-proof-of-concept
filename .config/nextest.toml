@@ -1,0 +1,31 @@
+[profile.default]
+# Limit parallel execution to avoid DB connection conflicts
+test-threads = 4
+# Continue running tests after failures
+fail-fast = false
+# Maximum test execution time
+slow-timeout = { period = "120s" }
+# Test output detail level
+status-level = "all"
+
+[profile.ci] 
+# Profile for CI environments
+test-threads = 2
+fail-fast = true
+slow-timeout = { period = "60s" }
+status-level = "fail"
+
+[profile.integration]
+# Profile for integration tests
+test-threads = 1  # Completely avoid DB operation conflicts
+slow-timeout = { period = "300s" }
+status-level = "all"
+
+# Test group definitions
+[[profile.default.overrides]]
+filter = "test(integration)"
+slow-timeout = { period = "180s" }
+
+[[profile.default.overrides]]
+filter = "test(unit)"
+slow-timeout = { period = "30s" }
