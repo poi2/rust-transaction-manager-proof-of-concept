@@ -277,6 +277,8 @@ pub trait DbContext: Send + Sync {
 }
 ```
 
+ref: [crates/domain/src/db_context.rs](https://github.com/poi2/rust-transaction-manager-proof-of-concept/blob/cc8978c52053c30e3c4d94e4fc005812119259e3/crates/domain/src/db_context.rs#L6-L24)
+
 この抽象化により、TransactionManager, Repository は DbContext を知っているが、お互いは直接的に依存がない状態を作り出します。
 これにより TransactionManager, Repository の責務・関心の分離と疎結合にできるようになりました。
 
@@ -285,7 +287,7 @@ pub trait DbContext: Send + Sync {
 Repository では `&Arc<Mutex<DbContext>>` を実行時に受け取る設計とします。
 
 ```rust
-// domain/src/inventory/repository.rs
+// domain/src/inventory/inventory_repository.rs
 
 use std::{future::Future, sync::Arc};
 use tokio::sync::Mutex;
@@ -313,6 +315,8 @@ pub trait InventoryRepository: Send + Sync {
 }
 ```
 
+ref: [crates/domain/src/inventory/inventory_repository.rs](https://github.com/poi2/rust-transaction-manager-proof-of-concept/blob/cc8978c52053c30e3c4d94e4fc005812119259e3/crates/domain/src/inventory/inventory_repository.rs#L7-L42)
+
 ### Step 3: TransactionManager の実装
 
 トランザクション管理の中核となる TransactionManager の定義です。
@@ -335,6 +339,8 @@ pub trait TransactionManager {
         T: Send;
 }
 ```
+
+ref: [crates/domain/src/transaction_manager.rs](https://github.com/poi2/rust-transaction-manager-proof-of-concept/blob/cc8978c52053c30e3c4d94e4fc005812119259e3/crates/domain/src/transaction_manager.rs#L8-L17)
 
 ### Step 4: TransactionManager と Repository の実装
 
@@ -402,10 +408,14 @@ impl TransactionManager for SeaOrmTransactionManager {
 }
 ```
 
+ref: [crates/infrastructure/repository/sea_orm_impl/src/transaction_manager.rs](https://github.com/poi2/rust-transaction-manager-proof-of-concept/blob/cc8978c52053c30e3c4d94e4fc005812119259e3/crates/infrastructure/repository/sea_orm_impl/src/transaction_manager.rs#L9-L59)
+
 実際の Repository 実装では、`Arc<Mutex>` から安全にトランザクションを取得します。
 本記事では InventoryRepository の SELECT FOR UPDATE しつつ Inventory を取得するメソッドだけ紹介します。
 
 ```rust
+// infrastructure/repository/sea_orm_impl/src/inventory_repository.rs
+
 impl InventoryRepository for SeaOrmInventoryRepository {
     type DbContext = SeaOrmDbContext;
     type Error = anyhow::Error;
@@ -439,6 +449,8 @@ impl InventoryRepository for SeaOrmInventoryRepository {
     }
 }
 ```
+
+ref: [crates/infrastructure/repository/sea_orm_impl/src/inventory_repository.rs](https://github.com/poi2/rust-transaction-manager-proof-of-concept/blob/cc8978c52053c30e3c4d94e4fc005812119259e3/crates/infrastructure/repository/sea_orm_impl/src/inventory_repository.rs#L16-L101)
 
 #### Step 4-2: sqlx による実装
 
@@ -552,9 +564,13 @@ impl TransactionManager for SqlxTransactionManager {
 }
 ```
 
+ref: [crates/infrastructure/repository/sqlx_impl/src/transaction_manager.rs](https://github.com/poi2/rust-transaction-manager-proof-of-concept/blob/cc8978c52053c30e3c4d94e4fc005812119259e3/crates/infrastructure/repository/sqlx_impl/src/transaction_manager.rs#L102-L177)
+
 sqlx の実装でも InventoryRepository の SELECT FOR UPDATE しつつ Inventory を取得するメソッドだけ紹介します。
 
 ```rust
+// infrastructure/repository/sqlx_impl/src/inventory_repository.rs
+
 impl InventoryRepository for SqlxInventoryRepository {
     type DbContext = SqlxDbContext;
     type Error = anyhow::Error;
@@ -589,6 +605,8 @@ impl InventoryRepository for SqlxInventoryRepository {
     }
 }
 ```
+
+ref: [crates/infrastructure/repository/sqlx_impl/src/inventory_repository.rs](https://github.com/poi2/rust-transaction-manager-proof-of-concept/blob/cc8978c52053c30e3c4d94e4fc005812119259e3/crates/infrastructure/repository/sqlx_impl/src/inventory_repository.rs#L13-L104)
 
 ### Step 5: ユースケースの実装
 
@@ -639,6 +657,8 @@ pub async fn create_order(&self, command: CreateOrderCommand) -> Result<Order, T
 }
 ```
 
+ref: [crates/use_case/src/order_management.rs](https://github.com/poi2/rust-transaction-manager-proof-of-concept/blob/cc8978c52053c30e3c4d94e4fc005812119259e3/crates/use_case/src/order_management.rs#L37-L72)
+
 # 本番利用する際の考慮事項
 
 ## `Arc<Mutex>` のオーバーヘッドとは
@@ -673,6 +693,8 @@ fn main() {
 }
 
 ```
+
+ref: [benches/arc_mutex_overhead.rs](https://github.com/poi2/rust-transaction-manager-proof-of-concept/blob/cc8978c52053c30e3c4d94e4fc005812119259e3/benches/arc_mutex_overhead.rs)
 
 ```
 > rustc benches/arc_mutex_overhead.rs -O -o benches/arc_mutex_overhead && benches/arc_mutex_overhead
