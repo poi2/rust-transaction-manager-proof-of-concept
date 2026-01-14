@@ -813,6 +813,7 @@ OpenTelemetry などでトレーシングを取得し、SeaORM や sqlx、ある
 
 # 参考資料
 
+- [poi2/rust-transaction-manager-proof-of-concept](https://github.com/poi2/rust-transaction-manager-proof-of-concept): 本記事の実装例とベンチマークコード
 - [Design the infrastructure persistence layer](https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/infrastructure-persistence-layer-design)
 - [Rust における Unit of Work の実装例](https://zenn.dev/poi2/articles/8162610d20798a)
 - [SeaQL/sea-orm](https://github.com/SeaQL/sea-orm)
